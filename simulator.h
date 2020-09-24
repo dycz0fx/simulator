@@ -6,7 +6,7 @@
 #include <time.h>
 
 #define SEG_SIZE 10
-
+#define MAX_NUM_SEGS 10
 class Device
 {
 public:
@@ -14,16 +14,16 @@ public:
         DEVICE_COMP,
         DEVICE_COMM,
     };
-    Device(std::string name, DeviceType type, int id);
+    Device(std::string name, DeviceType type, int node_id);
     std::string name;
     DeviceType type;
-    int id;
+    int node_id;
 };
 
 class Comp_device : public Device
 {
 public:
-    Comp_device(std::string name, int id);
+    Comp_device(std::string name, int node_id);
 };
 
 class Comm_device : public Device
@@ -31,7 +31,7 @@ class Comm_device : public Device
 public:
     float latency;
     float bandwidth;
-    Comm_device(std::string name, int id, float latency, float bandwidth);
+    Comm_device(std::string name, int node_id, float latency, float bandwidth);
 };
 
 class Machine
@@ -93,8 +93,7 @@ private:
 public:
     Machine machine;
     Task *new_comp_task(std::string name, Comp_device *device, float run_time);
-    // new_comm_task returns the comm_tasks in the last phase 
-    std::vector<Task *> new_comm_task(Task *source_task, Task *target_task, int message_size);
+    void new_comm_task(Task *source_task, Task *target_task, int message_size);
     void enter_ready_queue(Task *task);
     void add_dependency(std::vector<Task *> prev_tasks, Task *cur_task);
     void add_dependency(Task *prev_task, Task *cur_task);
