@@ -9,26 +9,28 @@ using std::unordered_map;
 using std::max;
 
 // class Device
-Device::Device(string name, DeviceType type, int node_id)
-: name(name), type(type), node_id(node_id)
+Device::Device(string name, DeviceType type, int node_id, int socket_id, int device_id)
+: name(name), type(type), node_id(node_id), socket_id(socket_id), device_id(device_id)
 {
 }
 
 // class Comp_device
-Comp_device::Comp_device(string name, int node_id)
-: Device(name, Device::DEVICE_COMP, node_id)
+Comp_device::Comp_device(string name, int node_id, int socket_id, int device_id)
+: Device(name, Device::DEVICE_COMP, node_id, socket_id, device_id)
 {
 }
 
 // class Comm_device
-Comm_device::Comm_device(string name, int node_id, float latency, float bandwidth)
-: Device(name, Device::DEVICE_COMM, node_id), latency(latency), bandwidth(bandwidth)
+Comm_device::Comm_device(string name, int node_id, int socket_id, int device_id, float latency, float bandwidth)
+: Device(name, Device::DEVICE_COMM, node_id, socket_id, device_id), latency(latency), bandwidth(bandwidth)
 {
 }
 
 // class Machine
 Machine::Machine() {
     comp_to_dram.clear();
+    comp_to_qpi_in.clear();
+    comp_to_qpi_out.clear();
     comp_to_nic_in.clear();
     comp_to_nic_out.clear();
 }
@@ -36,40 +38,68 @@ Machine::Machine() {
 void Machine::attach_dram(Comp_device *comp, Comm_device *comm)
 {
     assert(starts_with(comm->name, "DRAM"));
-    if (comp_to_dram.find(comp->node_id) == comp_to_dram.end()) {
-        comp_to_dram[comp->node_id] = comm;
+    if (comp_to_dram.find(comp->socket_id) == comp_to_dram.end()) {
+        comp_to_dram[comp->socket_id] = comm;
+    }
+}
+
+void Machine::attach_qpi_in(Comp_device *comp, Comm_device *comm)
+{
+    assert(starts_with(comm->name, "QPI"));
+    if (comp_to_qpi_in.find(comp->socket_id) == comp_to_qpi_in.end()) {
+        comp_to_qpi_in[comp->socket_id] = comm;
+    }
+}
+
+void Machine::attach_qpi_out(Comp_device *comp, Comm_device *comm)
+{
+    assert(starts_with(comm->name, "QPI"));
+    if (comp_to_qpi_out.find(comp->socket_id) == comp_to_qpi_out.end()) {
+        comp_to_qpi_out[comp->socket_id] = comm;
     }
 }
 
 void Machine::attach_nic_in(Comp_device *comp, Comm_device *comm)
 {
     assert(starts_with(comm->name, "NIC"));
-    if (comp_to_nic_in.find(comp->node_id) == comp_to_nic_in.end()) {
-        comp_to_nic_in[comp->node_id] = comm;
+    if (comp_to_nic_in.find(comp->socket_id) == comp_to_nic_in.end()) {
+        comp_to_nic_in[comp->socket_id] = comm;
     }
 }
 
 void Machine::attach_nic_out(Comp_device *comp, Comm_device *comm)
 {
     assert(starts_with(comm->name, "NIC"));
-    if (comp_to_nic_out.find(comp->node_id) == comp_to_nic_out.end()) {
-        comp_to_nic_out[comp->node_id] = comm;
+    if (comp_to_nic_out.find(comp->socket_id) == comp_to_nic_out.end()) {
+        comp_to_nic_out[comp->socket_id] = comm;
     }
 }
 
 vector<Comm_device *> Machine::get_comm_path(Comp_device *source, Comp_device *target)
 {
     vector<Comm_device *> ret;
+    // on the same device
+    if (source->device_id == target->device_id) {
+        return ret;
+    }
+    // on the same socket
+    else if (source->socket_id == target->socket_id) {
+        ret.emplace_back(comp_to_dram[source->socket_id]);
+
+    }
     // on the same node
-    if (source->node_id == target->node_id) {
-        ret.emplace_back(comp_to_dram[source->node_id]);
+    else if (source->node_id == target->node_id) {
+        //ret.emplace_back(comp_to_dram[source->socket_id]);
+        ret.emplace_back(comp_to_qpi_out[source->socket_id]);
+        ret.emplace_back(comp_to_qpi_in[target->socket_id]);
+        //ret.emplace_back(comp_to_dram[target->socket_id]);
     }
     // on different nodes
     else {
-        ret.emplace_back(comp_to_dram[source->node_id]);
-        ret.emplace_back(comp_to_nic_out[source->node_id]);
-        ret.emplace_back(comp_to_nic_in[target->node_id]);
-        ret.emplace_back(comp_to_dram[target->node_id]);
+        //ret.emplace_back(comp_to_dram[source->socket_id]);
+        ret.emplace_back(comp_to_nic_out[source->socket_id]);
+        ret.emplace_back(comp_to_nic_in[target->socket_id]);
+        //ret.emplace_back(comp_to_dram[target->socket_id]);
     }
     return ret;
 }
@@ -120,11 +150,15 @@ Task *Simulator::new_comp_task(string name, Comp_device *device, float run_time)
 
 void Simulator::new_comm_task(Task *source_task, Task *target_task, int message_size)
 {
+    assert(message_size > 0);
     vector<Comm_device *> path = machine.get_comm_path((Comp_device *)(source_task->device), (Comp_device *)(target_task->device));
     vector<vector<Task *>> all_tasks;
     // Limit the max number of segments per message
     int seg_size = SEG_SIZE;
     int num_segment = message_size / seg_size;
+    if (message_size % seg_size != 0) {
+        num_segment += 1;
+    }
     if (num_segment > MAX_NUM_SEGS) {
         num_segment = MAX_NUM_SEGS;
         seg_size = message_size / num_segment;
@@ -201,8 +235,6 @@ void Simulator::simulate()
         }
         float end_time = start_time + run_time;
         device_times[cur_task->device] = end_time;
-        cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "device_ready(" << 
-            ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
         if (end_time > sim_time)
             sim_time = end_time;
         for (size_t i = 0; i < cur_task->next_tasks.size(); i++) {
@@ -214,41 +246,58 @@ void Simulator::simulate()
             }
         }
     }
-
-    cout << "sim_time " << sim_time << endl;
+    cout << "sim_time " << sim_time << "ms" << endl;
     return;
 }
 
-int main()
+void Stencil_1D()
 {
     Simulator simulator;
 
-    int num_tasks = 4;
-    int num_nodes = 2;
-    int num_tasks_per_node = num_tasks / num_nodes;
+    int num_tasks = 18;
+    int num_nodes = 1;
+    int num_sockets_per_node = 2;
+    int num_sockets = num_nodes * num_sockets_per_node;
+    int num_tasks_per_socket = num_tasks / num_sockets;
 
     vector<vector<Comp_device *>> cpus;
     for (int i = 0; i < num_nodes; i++) {
-        cpus.push_back({});
-        for (int j = 0; j < num_tasks_per_node; j++) {
-            string cpu_name = "CPU " + to_string(j) + " on NODE " + to_string(i);
-            cpus[i].emplace_back(new Comp_device(cpu_name, i));
+        for (int j = 0; j < num_sockets_per_node; j++) {
+            cpus.push_back({});
+            for (int k = 0; k < num_tasks_per_socket; k++) {
+                int node_id = i;
+                int socket_id = i * num_sockets_per_node + j;
+                int device_id = socket_id * num_tasks_per_socket + k;
+                string cpu_name = "CPU " +to_string(device_id) + " on SOCKET " + to_string(socket_id) + " on NODE " + to_string(node_id);
+                cpus[socket_id].emplace_back(new Comp_device(cpu_name, node_id, socket_id, device_id));
+            }
+            
         }
     }
 
     for (int i = 0; i < num_nodes; i++) {
-        string dram_name = "DRAM " + to_string(i) + " on NODE " + to_string(i);
-        Comm_device *dram = new Comm_device(dram_name, i, 0, 1); // ms, B/ms or kB/s
-        // drams.emplace_back(Comm_device(dram_name, i, 0.00003, 8.75 * 1024 * 1024)); // ms, B/ms or kB/s
-        string nic_in_name = "NIC_IN " + to_string(i) + " on NODE " + to_string(i);
-        Comm_device *nic_in = new Comm_device(nic_in_name, i, 0, 2);
-        // nics_in.emplace_back(Comm_device(nic_in_name, i, 0.006214, 5 * 1024 * 1024));
-        string nic_out_name = "NIC_OUT " + to_string(i) + " on NODE " + to_string(i);
-        Comm_device *nic_out = new Comm_device(nic_out_name, i, 0, 2);
-        // nics_out.emplace_back(Comm_device(nic_out_name, i, 0.006214, 5 * 1024 * 1024));
-        simulator.machine.attach_dram(cpus[i][0], dram);
-        simulator.machine.attach_nic_in(cpus[i][0], nic_in);
-        simulator.machine.attach_nic_out(cpus[i][0], nic_out);
+        int node_id, socket_id;
+        node_id = i;
+        socket_id = i * num_sockets_per_node + 0;
+        string nic_in_name = "NIC_IN on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+        Comm_device *nic_in = new Comm_device(nic_in_name, node_id, socket_id, socket_id, 0.000507, 20.9545 * 1024 * 1024);
+        string nic_out_name = "NIC_OUT on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+        Comm_device *nic_out = new Comm_device(nic_out_name, node_id, socket_id, socket_id, 0.000507, 20.9545 * 1024 * 1024);
+        for (int j = 0; j < num_sockets_per_node; j++) {
+            node_id = i;
+            socket_id = i * num_sockets_per_node + j;
+            string dram_name = "DRAM on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+            Comm_device *dram = new Comm_device(dram_name, node_id, socket_id, socket_id, 0.00003, 8.75 * 1024 * 1024); // ms, B/ms or kB/s
+            string qpi_in_name = "QPI_IN on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+            Comm_device *qpi_in = new Comm_device(qpi_in_name, node_id, socket_id, socket_id, 0.0003965, 6.65753 * 1024 * 1024); // ms, B/ms or kB/s
+            string qpi_out_name = "QPI_OUT on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+            Comm_device *qpi_out = new Comm_device(qpi_out_name, node_id, socket_id, socket_id, 0.0003965, 6.65753 * 1024 * 1024); // ms, B/ms or kB/s
+            simulator.machine.attach_dram(cpus[socket_id][0], dram);
+            simulator.machine.attach_qpi_in(cpus[socket_id][0], qpi_in);
+            simulator.machine.attach_qpi_out(cpus[socket_id][0], qpi_out);
+            simulator.machine.attach_nic_in(cpus[socket_id][0], nic_in);
+            simulator.machine.attach_nic_out(cpus[socket_id][0], nic_out);
+        }
     }
 
     // 1D stencil
@@ -260,14 +309,17 @@ int main()
     // init comp tasks first
     int iters = 2;
     vector<vector <Task *>> comp_tasks;
-    for (int i = 0; i < iters; i++) {
+    for (int t = 0; t < iters; t++) {
         comp_tasks.push_back({});
-        for (int j = 0; j < num_nodes; j++) {
-            for (int k = 0; k < num_tasks_per_node; k++) {
-                int task_id = j * num_tasks_per_node + k;
-                string task_name = "comp_task " + to_string(task_id) + " iter " + to_string(i);
-                int run_time = 10;
-                comp_tasks[i].emplace_back(simulator.new_comp_task(task_name, cpus[j][k], run_time));
+        for (int i = 0; i < num_nodes; i++) {
+            for (int j = 0; j < num_sockets_per_node; j++) {
+                for (int k = 0; k < num_tasks_per_socket; k++) {
+                    int socket_id = i * num_sockets_per_node + j;
+                    int task_id = socket_id * num_tasks_per_socket + k;
+                    string task_name = "comp_task " + to_string(task_id) + " iter " + to_string(t);
+                    float run_time = 0 * 0.333605;
+                    comp_tasks[t].emplace_back(simulator.new_comp_task(task_name, cpus[socket_id][k], run_time));
+                }
             }
         }
     }
@@ -279,27 +331,29 @@ int main()
     // add comm tasks between iters
     for (int i = 1; i < iters; i++) {
         for (int j = 0; j < num_tasks; j++){
-            int message_size = 10;
+            int message_size = 262144;
             // left
-            /*
             int left = j - 1;
             if (left >= 0) {
-                simulator.new_comm_task(comp_tasks[i-1][j], comp_tasks[i][left], 10);
+                simulator.new_comm_task(comp_tasks[i-1][j], comp_tasks[i][left], message_size);
             }
-            */
             // right
             int right = j + 1;
             if (right < num_tasks) {
-                simulator.new_comm_task(comp_tasks[i-1][j], comp_tasks[i][right], 10);
+                simulator.new_comm_task(comp_tasks[i-1][j], comp_tasks[i][right], message_size);
             }
             // mid
-            simulator.new_comm_task(comp_tasks[i-1][j], comp_tasks[i][j], 10);
+            simulator.new_comm_task(comp_tasks[i-1][j], comp_tasks[i][j], message_size);
         }
     }
 
 
     simulator.simulate();
+}
 
+int main()
+{
+    Stencil_1D();
 }
 
 

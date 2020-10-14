@@ -5,8 +5,8 @@
 #include <string>
 #include <time.h>
 
-#define SEG_SIZE 10
-#define MAX_NUM_SEGS 10
+#define SEG_SIZE 4096
+#define MAX_NUM_SEGS 1000
 class Device
 {
 public:
@@ -14,16 +14,18 @@ public:
         DEVICE_COMP,
         DEVICE_COMM,
     };
-    Device(std::string name, DeviceType type, int node_id);
+    Device(std::string name, DeviceType type, int node_id, int socket_id, int device_id);
     std::string name;
     DeviceType type;
     int node_id;
+    int socket_id;
+    int device_id;
 };
 
 class Comp_device : public Device
 {
 public:
-    Comp_device(std::string name, int node_id);
+    Comp_device(std::string name, int node_id, int socket_id, int device_id);
 };
 
 class Comm_device : public Device
@@ -31,18 +33,22 @@ class Comm_device : public Device
 public:
     float latency;
     float bandwidth;
-    Comm_device(std::string name, int node_id, float latency, float bandwidth);
+    Comm_device(std::string name, int node_id, int socket_id, int device_id, float latency, float bandwidth);
 };
 
 class Machine
 {
 private:
     std::unordered_map<int, Comm_device *> comp_to_dram;
+    std::unordered_map<int, Comm_device *> comp_to_qpi_in;
+    std::unordered_map<int, Comm_device *> comp_to_qpi_out;
     std::unordered_map<int, Comm_device *> comp_to_nic_in;
     std::unordered_map<int, Comm_device *> comp_to_nic_out;
 public:
     Machine();
     void attach_dram(Comp_device *comp, Comm_device *comm);
+    void attach_qpi_in(Comp_device *comp, Comm_device *comm);
+    void attach_qpi_out(Comp_device *comp, Comm_device *comm);
     void attach_nic_in(Comp_device *comp, Comm_device *comm);
     void attach_nic_out(Comp_device *comp, Comm_device *comm);
     std::vector<Comm_device *> get_comm_path(Comp_device *source, Comp_device *target);
