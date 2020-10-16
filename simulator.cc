@@ -1,4 +1,6 @@
 #include "simulator.h"
+#include <unordered_set>
+#include <fstream>
 
 using std::string;
 using std::vector;
@@ -7,6 +9,7 @@ using std::endl;
 using std::to_string;
 using std::unordered_map;
 using std::max;
+using std::unordered_set;
 
 // class Device
 Device::Device(string name, DeviceType type, int node_id, int socket_id, int device_id)
@@ -118,10 +121,20 @@ void Task::add_next_task(Task *task)
     task->counter++;
 }
 
+string Task::to_string()
+{
+    return name + " on " + device->name;
+}
+
 // class Comp_task
 Comp_task::Comp_task(string name, Comp_device *device, float run_time)
 : Task(name, device), run_time(run_time)
 {
+}
+
+string Comp_task::to_string()
+{
+    return name + "(" + device->name + "," + std::to_string(run_time) + "ms)";
 }
 
 float Comp_task::cost()
@@ -133,6 +146,11 @@ float Comp_task::cost()
 Comm_task::Comm_task(string name, Comm_device *device, int message_size)
 : Task(name, device), message_size(message_size)
 {
+}
+
+string Comm_task::to_string()
+{
+    return name + "(" + device->name + "," + std::to_string(message_size) + "B)";
 }
 
 float Comm_task::cost()
@@ -226,6 +244,9 @@ void Simulator::simulate()
             ready_time = device_times[(Device *)cur_task->device];
         }
         float start_time = std::max(ready_time, cur_task->ready_time);
+        if (cur_task->device->type == Device::DEVICE_COMP) {
+            start_time += LEGION_OVERHEAD;
+        }
         float run_time = 0;
         if (cur_task->device->type == Device::DEVICE_COMP) {
             run_time = ((Comp_task *)cur_task)->cost();
@@ -250,7 +271,7 @@ void Simulator::simulate()
     return;
 }
 
-void Stencil_1D()
+void stencil_1d()
 {
     Simulator simulator;
 
@@ -351,9 +372,206 @@ void Stencil_1D()
     simulator.simulate();
 }
 
-int main()
+vector<string> split(string srcStr, const string& delim)
 {
-    Stencil_1D();
+	int nPos = 0;
+	vector<string> vec;
+	nPos = srcStr.find(delim.c_str());
+	while(-1 != nPos)
+	{
+		string temp = srcStr.substr(0, nPos);
+		vec.push_back(temp);
+		srcStr = srcStr.substr(nPos+1);
+		nPos = srcStr.find(delim.c_str());
+	}
+	vec.push_back(srcStr);
+	return vec;
+}
+
+void circuit(int argc, char **argv)
+{
+    Simulator simulator;
+
+    // set up comp devices
+    int num_cpus = 18;
+    int num_nodes = 2;
+    int num_sockets_per_node = 2;
+    int num_sockets = num_nodes * num_sockets_per_node;
+    int num_cpus_per_socket = num_cpus / num_sockets;
+    vector<vector<Comp_device *>> cpus;
+    for (int i = 0; i < num_nodes; i++) {
+        for (int j = 0; j < num_sockets_per_node; j++) {
+            cpus.push_back({});
+            for (int k = 0; k < num_cpus_per_socket; k++) {
+                int node_id = i;
+                int socket_id = i * num_sockets_per_node + j;
+                int device_id = socket_id * num_cpus_per_socket + k;
+                string cpu_name = "CPU " +to_string(device_id) + " on SOCKET " + to_string(socket_id) + " on NODE " + to_string(node_id);
+                cpus[socket_id].emplace_back(new Comp_device(cpu_name, node_id, socket_id, device_id));
+            }
+        }
+    }
+    unordered_map<string, Comp_device *> cpu_id_map;
+    cpu_id_map["0x1d00000000000001"] = cpus[0][0];
+    cpu_id_map["0x1d00000000000002"] = cpus[0][1];
+    cpu_id_map["0x1d00010000000001"] = cpus[2][0];
+    cpu_id_map["0x1d00010000000002"] = cpus[2][1];
+
+
+    // set up comm devices
+    for (int i = 0; i < num_nodes; i++) {
+        int node_id, socket_id;
+        node_id = i;
+        socket_id = i * num_sockets_per_node + 0;
+        string nic_in_name = "NIC_IN on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+        Comm_device *nic_in = new Comm_device(nic_in_name, node_id, socket_id, socket_id, 0.000507, 20.9545 * 1024 * 1024);
+        string nic_out_name = "NIC_OUT on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+        Comm_device *nic_out = new Comm_device(nic_out_name, node_id, socket_id, socket_id, 0.000507, 20.9545 * 1024 * 1024);
+        for (int j = 0; j < num_sockets_per_node; j++) {
+            node_id = i;
+            socket_id = i * num_sockets_per_node + j;
+            string dram_name = "DRAM on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+            Comm_device *dram = new Comm_device(dram_name, node_id, socket_id, socket_id, 0.00003, 8.75 * 1024 * 1024); // ms, B/ms or kB/s
+            string qpi_in_name = "QPI_IN on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+            Comm_device *qpi_in = new Comm_device(qpi_in_name, node_id, socket_id, socket_id, 0.0003965, 6.65753 * 1024 * 1024); // ms, B/ms or kB/s
+            string qpi_out_name = "QPI_OUT on SOCKET " + to_string(socket_id) + " NODE " + to_string(node_id);
+            Comm_device *qpi_out = new Comm_device(qpi_out_name, node_id, socket_id, socket_id, 0.0003965, 6.65753 * 1024 * 1024); // ms, B/ms or kB/s
+            simulator.machine.attach_dram(cpus[socket_id][0], dram);
+            simulator.machine.attach_qpi_in(cpus[socket_id][0], qpi_in);
+            simulator.machine.attach_qpi_out(cpus[socket_id][0], qpi_out);
+            simulator.machine.attach_nic_in(cpus[socket_id][0], nic_in);
+            simulator.machine.attach_nic_out(cpus[socket_id][0], nic_out);
+        }
+    }
+
+    string folder;
+    if (argc == 2) {
+        folder = argv[1];
+    }
+    unordered_map<int, float> cost_map;
+    // get costs of tasks
+    std::ifstream cost_file(folder + "/cost");
+    int uid;
+    float cost;
+    while (cost_file >> uid >> cost) {
+        cout << uid << " " << cost << endl;
+        if (cost_map.find(uid) == cost_map.end()) {
+            cost_map[uid] = cost * 0.001;  //us -> ms
+        }
+        else {
+            cout << "Has duplicate uid in cost file" << endl;
+        }
+    }
+
+    unordered_map<string, Task *> comp_tasks_map;
+    unordered_map<string, int> messages_map;
+    unordered_set<string> left;
+    unordered_set<string> right;
+    // get dependencies
+    std::ifstream dag_file(folder + "/dag");
+    if (dag_file.is_open()) {
+        std::string line;
+        while (std::getline(dag_file, line)) {
+            vector<string> line_array = split(line, " ");
+            /*
+            for (int i = 0; i < line_array.size(); i++) {
+                cout << line_array[i] << " ";
+            }
+            cout << endl;
+            */
+            if (line_array[0] == "comp:") {
+                int task_id = -1;
+                for (int i = 0; i < line_array.size(); i++) {
+                    if (line_array[i] == "(UID:") {
+                        task_id = stoi(line_array[i+1].substr(0, line_array[i+1].size() - 1));
+                        break;
+                    }
+                }
+                string task_name = "op_node_" + to_string(task_id);
+                Task *cur_task = simulator.new_comp_task(task_name, cpu_id_map[line_array.back()], cost_map[task_id]);
+                cout << cur_task->to_string() << endl;
+                comp_tasks_map[task_name] = cur_task;
+            }
+            else if (line_array[0] == "comm:") {
+                cout << line << endl;
+                if (line_array[4] == "'Realm" and (line_array[5] == "Copy" or line_array[5] == "Fill")) {
+                    string task_name;
+                    string realm_id = line_array[6].substr(1, line_array[6].size() - 2);
+                    if (line_array[5] == "Copy")
+                        task_name = "realm_copy_" + realm_id;
+                    else
+                        task_name = "realm_fill_" + realm_id;
+                    string cpu_id = line_array.back().substr(0, line_array.back().size() - 3);
+                Task *cur_task = simulator.new_comp_task(task_name, cpu_id_map[cpu_id], 0);
+                cout << cur_task->to_string() << endl;
+                comp_tasks_map[task_name] = cur_task;
+                int index_size = 0, field_size = 0;
+                for (int i = 0; i < line_array.size(); i++) {
+                    if (line_array[i] == "Index_Space_Size:") {
+                        index_size = stoi(line_array[i+1]);
+                    }
+                    if (line_array[i] == "Field_Size:") {
+                        field_size = stoi(line_array[i+1]);
+                    }
+                }
+                assert(index_size > 0 and field_size > 0);
+                messages_map[task_name] = index_size * field_size;
+                }
+                else {
+                    cout << "comm: has other types" << endl;
+                }
+            }
+            else if (line_array[0] == "deps:") {
+                cout << line << endl;
+                //cout << line_array[1] << " " << line_array[3] << endl;
+                if (comp_tasks_map.find(line_array[1]) != comp_tasks_map.end() and
+                    comp_tasks_map.find(line_array[3]) != comp_tasks_map.end()) {
+                    int message_size = 1;
+                    if (starts_with(line_array[3], "realm")) {
+                        message_size = messages_map[line_array[3]];
+                    }
+                    else if (starts_with(line_array[1], "realm")) {
+                        message_size = messages_map[line_array[1]];
+                    }
+                    cout << message_size << endl;
+                    simulator.new_comm_task(comp_tasks_map[line_array[1]], comp_tasks_map[line_array[3]], message_size);
+                    if (left.find(line_array[1]) == left.end()) {
+                        left.insert(line_array[1]);
+                    }
+                    if (right.find(line_array[3]) == right.end()) {
+                        right.insert(line_array[3]);
+                    }
+                }
+                else {
+                    if (comp_tasks_map.find(line_array[1]) == comp_tasks_map.end())
+                        cout << "deps: cannot find " << line_array[1] << endl;
+                    if (comp_tasks_map.find(line_array[3]) == comp_tasks_map.end())
+                        cout << "deps: cannot find " << line_array[3] << endl;
+                }
+
+            }
+            else {
+                cout << "error" << endl;
+            }
+        }
+        dag_file.close();
+    }
+
+    for (auto i : left) {
+        if (right.find(i) == right.end()) {
+            cout << "starts with:" << i << endl;
+            simulator.enter_ready_queue(comp_tasks_map[i]);
+        }
+    }
+
+
+
+    simulator.simulate();
+}
+
+int main(int argc, char **argv)
+{
+    circuit(argc, argv);
 }
 
 

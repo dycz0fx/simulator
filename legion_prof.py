@@ -1451,7 +1451,10 @@ class Task(Operation, TimeRange, HasDependencies, HasWaiters):
         self.variant = variant
         self.initiation = ''
         self.is_task = True
-        output.write(self.get_info()[1:-1] + ' ' + str(self.active_time()) + '\n')
+        global_start.append(start)
+        global_stop.append(stop)
+        print(self.get_info() + " ready:" + str(ready/1000) + " start:" + str(start/1000) + " stop:" + str(stop/1000) + "ms")
+        output.write(self.get_info()[1:-1] + ' ' + str(self.total_time()) + '\n')
 
     def assign_color(self, color):
         assert self.color is None
@@ -3846,6 +3849,11 @@ def main():
     global output
     output = open("cost","w+")
 
+    global global_start
+    global_start = []
+    global global_stop
+    global_stop = []
+    
     class MyParser(argparse.ArgumentParser):
         def error(self, message):
             self.print_usage(sys.stderr)
@@ -3962,6 +3970,7 @@ def main():
             state.show_copy_matrix(copy_output_prefix)
     
     output.close()
+    print(str((max(global_stop) - min(global_start))/ 1000) + "ms")
 
 if __name__ == '__main__':
     start = time.time()

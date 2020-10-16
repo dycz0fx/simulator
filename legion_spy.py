@@ -2242,7 +2242,7 @@ class PointSet(object):
                         self.space_string += ' u ' + str(space)
                         temp_shape.__ior__(space.shape)
                 print(temp_shape.volume())
-                self.space_string += ' Index_Space_Size:' + str(temp_shape.volume())
+                self.space_string += ' Index_Space_Size: ' + str(temp_shape.volume())
         # If we didn't find an index space to represent this
         # set of points then we express this as a union of intersections
         if self.space_string is None:
@@ -2280,8 +2280,8 @@ class PointSet(object):
                     else:
                         point_str += ' ^ ' + str(space)
                         temp_shape.__iand__(space.shape)
-                point_str += ' Index_Space_Size:' + str(temp_shape.volume())
-                point_str += ')'
+                point_str += ' Index_Space_Size: ' + str(temp_shape.volume())
+                point_str += ' )'
                 print(temp_shape.volume())
                 if self.space_string is None:
                     self.space_string = point_str
@@ -3037,9 +3037,9 @@ class Field(object):
 
     def __str__(self):
         if self.name is None:
-            return "Field "+str(self.fid)+ ", Field_Size: "+str(self.size)
+            return "Field "+str(self.fid)+ ", Field_Size: "+str(self.size)+" "
         else:
-            return self.name + ' (' + str(self.fid) + ", Field_Size: "+str(self.size) + ')'
+            return self.name + ' (' + str(self.fid) + ", Field_Size: "+str(self.size) + ' )'
 
     __repr__ = __str__
 
@@ -7697,7 +7697,7 @@ class Operation(object):
         if self.replayed:
             title += '  (replayed)'
         if self.task is not None:        
-            output.write("comp:" + title + "\n")
+            output.write("comp: " + title + "\n")
         label = printer.generate_html_op_label(title, self.reqs, self.mappings,
                                        self.get_color(), self.state.detailed_graphs)
         printer.println(self.node_name+' [label=<'+label+'>,fontsize=14,'+\
@@ -9988,7 +9988,7 @@ class RealmCopy(RealmBase):
                             line.append(str(src_field)+':'+str(dst_field)+' Redop='+str(redop))
                         else:
                             line.append(str(src_field)+':'+str(dst_field))
-                    line.append(str(src_inst)+':'+str(dst_inst))
+                    line.append(str(src_inst)+','+str(src_inst.processor)+':'+str(dst_inst)+','+str(src_inst.processor))
                     if first_field:
                         line.insert(0, {"label" : "Fields",
                                         "rowspan" : num_fields})
@@ -10132,12 +10132,13 @@ class RealmFill(RealmBase):
                 dst_inst = self.dsts[fidx]
                 line = []
                 line.append(str(dst_field))
-                line.append(str(dst_inst))
+                line.append(str(dst_inst)+','+str(dst_inst.processor))
                 if first_field:
                     line.insert(0, {"label" : "Fields",
                                     "rowspan" : num_fields})
                     first_field = False
                 lines.append(line)
+        output.write("comm: " + str(lines) + "\n")
         color = 'chartreuse'
         size = 14
         label = '<table border="0" cellborder="1" cellspacing="0" cellpadding="3" bgcolor="%s">' % color + \

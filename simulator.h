@@ -7,6 +7,7 @@
 
 #define SEG_SIZE 4096
 #define MAX_NUM_SEGS 1000
+#define LEGION_OVERHEAD 9
 class Device
 {
 public:
@@ -64,6 +65,7 @@ public:
     std::vector<Task *> next_tasks;
     int counter;
     void add_next_task(Task *task);
+    virtual std::string to_string();
 };
 
 class Comp_task : public Task
@@ -72,6 +74,7 @@ public:
     Comp_task(std::string name, Comp_device *device, float run_time);
     float run_time;
     float cost();
+    std::string to_string();
 };
 
 class Comm_task : public Task
@@ -80,6 +83,7 @@ public:
     Comm_task(std::string name, Comm_device *device, int message_size);
     int message_size;
     float cost();
+    std::string to_string();
 };
 
 class TaskCompare {
