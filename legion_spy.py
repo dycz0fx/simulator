@@ -7697,7 +7697,7 @@ class Operation(object):
         if self.replayed:
             title += '  (replayed)'
         if self.task is not None:        
-            output.write("comp: " + title + "\n")
+            output_comp.write("comp: " + title + "\n")
         label = printer.generate_html_op_label(title, self.reqs, self.mappings,
                                        self.get_color(), self.state.detailed_graphs)
         printer.println(self.node_name+' [label=<'+label+'>,fontsize=14,'+\
@@ -7842,7 +7842,7 @@ class Operation(object):
                     printer.println(src.node_name+' -> '+self.node_name+
                             ' [lhead='+self.cluster_name+',style=solid,'+
                             'color=red,penwidth=2];')
-                output.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
+                output_deps.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
         else:
             for src in self.physical_incoming:
                 if src.cluster_name is not None:
@@ -7852,7 +7852,7 @@ class Operation(object):
                 else:
                     printer.println(src.node_name+' -> '+self.node_name+
                             ' [style=solid,color=black,penwidth=2];')
-                output.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
+                output_deps.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
 
     def print_eq_node(self, printer, eq_key):
         pass
@@ -9045,7 +9045,7 @@ class Instance(object):
         if self.is_virtual():
             return "Virtual Instance"
         else:
-            return "Instance "+hex(self.handle)
+            return "Instance "+hex(self.handle)+','+str(self.processor)+','+str(self.memory)
 
     __repr__ = __str__
 
@@ -9635,7 +9635,7 @@ class RealmBase(object):
             else:
                 printer.println(src.node_name+' -> '+self.node_name+
                         ' [style=solid,color=blue,penwidth=2];')
-            output.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
+            output_deps.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
 
     def print_eq_node(self, printer, eq_key):
         pass
@@ -9988,13 +9988,13 @@ class RealmCopy(RealmBase):
                             line.append(str(src_field)+':'+str(dst_field)+' Redop='+str(redop))
                         else:
                             line.append(str(src_field)+':'+str(dst_field))
-                    line.append(str(src_inst)+','+str(src_inst.processor)+':'+str(dst_inst)+','+str(src_inst.processor))
+                    line.append(str(src_inst)+':'+str(dst_inst))
                     if first_field:
                         line.insert(0, {"label" : "Fields",
                                         "rowspan" : num_fields})
                         first_field = False
                     lines.append(line)
-        output.write("comm: " + str(lines) + "\n")
+        output_comm.write("comm: " + str(lines) + "\n")
         if self.indirections is not None:
             color = 'darkorange'
         else:
@@ -10132,13 +10132,13 @@ class RealmFill(RealmBase):
                 dst_inst = self.dsts[fidx]
                 line = []
                 line.append(str(dst_field))
-                line.append(str(dst_inst)+','+str(dst_inst.processor))
+                line.append(str(dst_inst))
                 if first_field:
                     line.insert(0, {"label" : "Fields",
                                     "rowspan" : num_fields})
                     first_field = False
                 lines.append(line)
-        output.write("comm: " + str(lines) + "\n")
+        output_comm.write("comm: " + str(lines) + "\n")
         color = 'chartreuse'
         size = 14
         label = '<table border="0" cellborder="1" cellspacing="0" cellpadding="3" bgcolor="%s">' % color + \
@@ -12946,8 +12946,12 @@ def run_geometry_tests(num_tests=10000):
     return success
 
 def main(temp_dir):
-    global output
-    output = open("dag","w+")
+    global output_comp
+    output_comp = open("comp","w+")
+    global output_comm
+    output_comm = open("comm","w+")
+    global output_deps
+    output_deps = open("deps","w+")
 
     class MyParser(argparse.ArgumentParser):
         def error(self, message):
@@ -13186,7 +13190,9 @@ def main(temp_dir):
         except:
             print('WARNING: Unable to copy temporary files into current directory')
     
-    output.close()
+    output_comp.close()
+    output_comm.close()
+    output_deps.close()
 
 if __name__ == "__main__":
     temp_dir = tempfile.mkdtemp()+'/'

@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": ["/Users/xluo/Documents/circuit_master"],
+            "args": ["~/Documents/flexflow_sherlock/alexnet_iter20"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

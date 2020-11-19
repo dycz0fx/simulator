@@ -677,6 +677,8 @@ class Processor(object):
         total = 0
         for task in self.tasks:
             total += task.total_time()
+            if isinstance(task, Task):
+                print(task.get_info() + ' ' + str(task.start) + ',' + str(task.stop))
         return total
 
     def active_time(self):
@@ -1453,7 +1455,7 @@ class Task(Operation, TimeRange, HasDependencies, HasWaiters):
         self.is_task = True
         global_start.append(start)
         global_stop.append(stop)
-        print(self.get_info() + " ready:" + str(ready/1000) + " start:" + str(start/1000) + " stop:" + str(stop/1000) + "ms")
+        #print(self.get_info() + " ready:" + str(ready/1000) + " start:" + str(start/1000) + " stop:" + str(stop/1000) + "ms")
         output.write(self.get_info()[1:-1] + ' ' + str(self.total_time()) + '\n')
 
     def assign_color(self, color):
@@ -3060,9 +3062,9 @@ class State(object):
 
     def print_stats(self, verbose):
         self.print_processor_stats(verbose)
-        self.print_memory_stats(verbose)
-        self.print_channel_stats(verbose)
-        self.print_task_stats(verbose)
+        #self.print_memory_stats(verbose)
+        #self.print_channel_stats(verbose)
+        #self.print_task_stats(verbose) #could be useful
 
     def assign_colors(self):
         # Subtract out some colors for which we have special colors

@@ -7,5 +7,11 @@ project(simulator)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+add_library (simulator simulator.cc)
+
 # add the executable
-add_executable(simulator simulator.cc)
+add_executable(main main.cc)
+
+# add the libraries
+target_link_libraries(main simulator)
+

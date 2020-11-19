@@ -8,7 +8,7 @@
                 "-std=c++11",
                 "-stdlib=libc++",
                 "-g",
-                "${file}",
+                "${workspaceFolder}/*.cc",
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}"
             ],
