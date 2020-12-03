@@ -73,8 +73,13 @@ public:
     Comm_device(std::string name, CommDevType comm_type, int node_id, int socket_id, int device_id, float latency, float bandwidth);
 };
 
-
 class Machine
+{
+public:
+    virtual std::vector<Comm_device *> get_comm_path(Mem_device *src_mem, Mem_device *tar_mem) { return {}; }
+};
+
+class Machine_Sherlock : public Machine
 {
 private:
     int num_nodes;
@@ -103,7 +108,7 @@ private:
     void add_gpus();
 
 public:
-    Machine(int num_nodes, int num_sockets_per_node, int num_cpus_per_socket, int num_gpus_per_socket);
+    Machine_Sherlock(int num_nodes, int num_sockets_per_node, int num_cpus_per_socket, int num_gpus_per_socket);
     Comp_device *get_cpu(int device_id);
     Comp_device *get_cpu(int socket_id, int local_id);
     Comp_device *get_gpu(int device_id);
@@ -120,6 +125,33 @@ public:
     void attach_nvlink(Mem_device *src_mem, Mem_device *tar_mem, Comm_device *comm);    // nvlinks between GPUs
     std::vector<Comm_device *> get_comm_path(Mem_device *src_mem, Mem_device *tar_mem);
     std::string to_string();
+};
+
+class Machine_Old : public Machine
+{
+private:
+    int num_nodes;
+    int num_cpus_per_node;
+    int num_gpus_per_node;
+    int total_num_cpus;
+    int total_num_gpus;
+public:
+    std::unordered_map<int, Comp_device *> id_to_cpu;
+    std::unordered_map<int, Mem_device *> id_to_sys_mem;
+    std::unordered_map<int, Comp_device *> id_to_gpu;
+    std::unordered_map<int, Mem_device *> id_to_gpu_fb_mem;
+    std::unordered_map<int, Comm_device *> ids_to_inter_gpu_comm_device;
+    std::unordered_map<int, Comm_device *> id_to_gputodram_comm_device;
+    std::unordered_map<int, Comm_device *> id_to_dramtogpu_comm_device;
+    std::unordered_map<int, Comm_device *> ids_to_inter_node_comm_device;
+
+    Machine_Old(int num_nodes, int num_cpus_per_node, int num_gpus_per_node);
+    Comp_device *get_cpu(int device_id);
+    Comp_device *get_gpu(int device_id);
+    Mem_device *get_sys_mem(int socket_id);
+    Mem_device *get_gpu_fb_mem(int device_id);
+
+    std::vector<Comm_device *> get_comm_path(Mem_device *src_mem, Mem_device *tar_mem);
 };
 
 class Task

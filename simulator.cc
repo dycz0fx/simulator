@@ -35,8 +35,8 @@ Comm_device::Comm_device(std::string name, CommDevType comm_type, int node_id, i
 {
 }
 
-// class Machine
-Machine::Machine(int num_nodes, int num_sockets_per_node, int num_cpus_per_socket, int num_gpus_per_socket) 
+// class Machine_Sherlock
+Machine_Sherlock::Machine_Sherlock(int num_nodes, int num_sockets_per_node, int num_cpus_per_socket, int num_gpus_per_socket) 
 : num_nodes(num_nodes), num_sockets_per_node(num_sockets_per_node), num_cpus_per_socket(num_cpus_per_socket), num_gpus_per_socket(num_gpus_per_socket)
 {
     num_sockets = num_nodes * num_sockets_per_node;
@@ -47,7 +47,7 @@ Machine::Machine(int num_nodes, int num_sockets_per_node, int num_cpus_per_socke
     add_gpus();
 }
 
-void Machine::add_cpus()
+void Machine_Sherlock::add_cpus()
 {
     for (int i = 0; i < num_nodes; i++) {
         int node_id = i;
@@ -69,7 +69,7 @@ void Machine::add_cpus()
     }
 }
 
-void Machine::add_gpus()
+void Machine_Sherlock::add_gpus()
 {
     for (int i = 0; i < num_nodes; i++) {
         int node_id = i;
@@ -95,7 +95,7 @@ void Machine::add_gpus()
     }
 }
 
-void Machine::add_membuses(float latency, float bandwidth)
+void Machine_Sherlock::add_membuses(float latency, float bandwidth)
 {
     for (int i = 0; i < num_nodes; i++) {
         int node_id = i;
@@ -109,7 +109,7 @@ void Machine::add_membuses(float latency, float bandwidth)
     }    
 }
 
-void Machine::add_upis(float latency, float bandwidth)
+void Machine_Sherlock::add_upis(float latency, float bandwidth)
 {
     for (int i = 0; i < num_nodes; i++) {
         int node_id = i;
@@ -126,7 +126,7 @@ void Machine::add_upis(float latency, float bandwidth)
     }    
 }
 
-void Machine::add_nics(float latency, float bandwidth)
+void Machine_Sherlock::add_nics(float latency, float bandwidth)
 {
     for (int i = 0; i < num_nodes; i++) {
         int node_id = i;
@@ -143,7 +143,7 @@ void Machine::add_nics(float latency, float bandwidth)
     }    
 }
 
-void Machine::add_pcis(float latency, float bandwidth)
+void Machine_Sherlock::add_pcis(float latency, float bandwidth)
 {
     for (int i = 0; i < num_nodes; i++) {
         int node_id = i;
@@ -160,7 +160,7 @@ void Machine::add_pcis(float latency, float bandwidth)
     }    
 }
 
-void Machine::add_nvlinks(int num_nvlinks_per_node, float latency, float bandwidth)
+void Machine_Sherlock::add_nvlinks(int num_nvlinks_per_node, float latency, float bandwidth)
 {
     assert(num_gpus_per_socket == 2);
     assert(num_sockets_per_node == 2);
@@ -215,47 +215,47 @@ void Machine::add_nvlinks(int num_nvlinks_per_node, float latency, float bandwid
     }
 }
 
-Comp_device *Machine::get_cpu(int device_id)
+Comp_device *Machine_Sherlock::get_cpu(int device_id)
 {
     return cpus[device_id / num_cpus_per_socket][device_id % num_cpus_per_socket];
 }
 
-Comp_device *Machine::get_cpu(int socket_id, int local_id)
+Comp_device *Machine_Sherlock::get_cpu(int socket_id, int local_id)
 {
     return cpus[socket_id][local_id];
 } 
 
-Comp_device *Machine::get_gpu(int device_id)
+Comp_device *Machine_Sherlock::get_gpu(int device_id)
 {
     return gpus[device_id / num_gpus_per_socket][device_id % num_gpus_per_socket];
 }
 
-Comp_device *Machine::get_gpu(int socket_id, int local_id)
+Comp_device *Machine_Sherlock::get_gpu(int socket_id, int local_id)
 {
     return gpus[socket_id][local_id];
 }
 
-Mem_device *Machine::get_sys_mem(int socket_id)
+Mem_device *Machine_Sherlock::get_sys_mem(int socket_id)
 {
     return sys_mems[socket_id];
 }
 
-Mem_device *Machine::get_z_copy_mem(int socket_id)
+Mem_device *Machine_Sherlock::get_z_copy_mem(int socket_id)
 {
     return z_copy_mems[socket_id];
 }
 
-Mem_device *Machine::get_gpu_fb_mem(int device_id)
+Mem_device *Machine_Sherlock::get_gpu_fb_mem(int device_id)
 {
     return gpu_fb_mems[device_id / num_gpus_per_socket][device_id % num_gpus_per_socket];
 }
 
-Mem_device *Machine::get_gpu_fb_mem(int socket_id, int local_id)
+Mem_device *Machine_Sherlock::get_gpu_fb_mem(int socket_id, int local_id)
 {
     return gpu_fb_mems[socket_id][local_id];
 }
 
-void Machine::attach_nvlink(Mem_device *src_mem, Mem_device *tar_mem, Comm_device *comm) 
+void Machine_Sherlock::attach_nvlink(Mem_device *src_mem, Mem_device *tar_mem, Comm_device *comm) 
 {
     assert(comm->comm_type == Comm_device::NVLINK_COMM);
     pair<int, int> key(src_mem->device_id, tar_mem->device_id);
@@ -264,7 +264,7 @@ void Machine::attach_nvlink(Mem_device *src_mem, Mem_device *tar_mem, Comm_devic
     }
 }
 
-vector<Comm_device *> Machine::get_comm_path(Mem_device *src_mem, Mem_device *tar_mem)
+vector<Comm_device *> Machine_Sherlock::get_comm_path(Mem_device *src_mem, Mem_device *tar_mem)
 {
     vector<Comm_device *> ret;
     // on the same memory
@@ -386,15 +386,10 @@ vector<Comm_device *> Machine::get_comm_path(Mem_device *src_mem, Mem_device *ta
         cout << "No path found between " << src_mem->name << " and " << tar_mem->name << endl;
     }
 
-    cout << "from " << src_mem->name << " to " << tar_mem->name << ": ";
-    for (int i = 0; i < ret.size(); i++) {
-        cout << ret[i]->name << " ";
-    }
-    cout << endl;
     return ret;
 }
 
-string Machine::to_string()
+string Machine_Sherlock::to_string()
 {
     string s;
     for (int i = 0; i < num_nodes; i++) {
@@ -436,6 +431,156 @@ string Machine::to_string()
     }
     return s;
 }
+
+// class Machine_Old
+Machine_Old::Machine_Old(int num_nodes, int num_cpus_per_node, int num_gpus_per_node)
+: num_nodes(num_nodes), num_cpus_per_node(num_cpus_per_node), num_gpus_per_node(num_gpus_per_node)
+{
+    float inter_gpu_bandwidth = 20 * 1024 * 1024.0f; /* B/ms*/
+    float inter_node_bandwidth = 12 * 1024 * 1024.0f / num_nodes; /* B/ms*/
+    float gpu_dram_bandwidth = 16 * 1024 * 1024.0f; /* B/ms*/
+
+    total_num_cpus = num_cpus_per_node * num_nodes;
+    total_num_gpus = num_gpus_per_node * num_nodes;
+    
+    // Create CPU compute device
+    for (int i = 0; i < num_nodes; i++) {
+        // add system memory
+        string sys_mem_name = "SYSTEM_MEM " + std::to_string(i);
+        id_to_sys_mem[i] = new Mem_device(sys_mem_name, Mem_device::SYSTEM_MEM, i, i, i);
+        for (int j = 0; j < num_cpus_per_node; j++) {
+            int device_id = i * num_cpus_per_node + j;
+            string cpu_name = "CPU " + std::to_string(device_id);
+            id_to_cpu[device_id] = new Comp_device(cpu_name, Comp_device::LOC_PROC, i, i, device_id);
+        }
+    }
+
+    // Create GPU compute device
+    for (int i = 0; i < num_nodes; i++) {
+        for (int j = 0; j < num_gpus_per_node; j++) {
+            int device_id = i * num_gpus_per_node + j;
+            string gpu_name = "GPU " + std::to_string(device_id);
+            id_to_gpu[device_id] = new Comp_device(gpu_name, Comp_device::TOC_PROC, i, i, device_id);
+            string gpu_mem_name = "GPU_FB_MEM " + std::to_string(device_id);
+            id_to_gpu_fb_mem[device_id] = new Mem_device(gpu_mem_name, Mem_device::GPU_FB_MEM, i, i, device_id);
+        }
+    }
+
+    // Create inter GPU comm devices (NVLinks)
+    for (int i = 0; i < total_num_gpus; i++) {
+        for (int j = 0; j < total_num_gpus; j++) {
+            Device* src = id_to_gpu[i];
+            Device* dst = id_to_gpu[j];
+            if (src->node_id == dst->node_id && src != dst) {
+                int device_id = i * total_num_gpus + j;
+                string nvlink_name = "NVLINK " + std::to_string(device_id);
+                ids_to_inter_gpu_comm_device[device_id] = new Comm_device(nvlink_name, Comm_device::NVLINK_COMM, src->node_id, src->node_id, device_id, 0, inter_gpu_bandwidth);
+            }
+        }
+    }
+
+    // Create gpu<->dram comm devices
+    for (int i = 0; i < total_num_gpus; i++) {
+        int node_id = total_num_gpus / num_gpus_per_node;
+        string pci_in_name = "PCI_IN " + std::to_string(i);
+        id_to_gputodram_comm_device[i] = new Comm_device(pci_in_name, Comm_device::PCI_IN_COMM, node_id, node_id, i, 0, gpu_dram_bandwidth);
+        string pci_out_name = "PCI_OUT " + std::to_string(i);
+        id_to_dramtogpu_comm_device[i] = new Comm_device(pci_out_name, Comm_device::PCI_OUT_COMM, node_id, node_id, i, 0, gpu_dram_bandwidth);
+    }
+
+    // Create inter node comm devices
+    for (int i = 0; i < num_nodes; i++) {
+        for (int j = 0; j < num_nodes; j++) {
+            if (i != j) {
+                int device_id = i * num_nodes + j;
+                string nic_name = "NIC " + std::to_string(device_id);
+                ids_to_inter_node_comm_device[device_id] = new Comm_device(nic_name, Comm_device::NIC_OUT_COMM, -1, -1, device_id, 0, inter_node_bandwidth);
+            }
+        }
+    }
+}
+
+Comp_device *Machine_Old::get_cpu(int device_id) 
+{
+    assert(id_to_cpu.find(device_id) != id_to_cpu.end());
+    return id_to_cpu[device_id];
+}
+
+Comp_device *Machine_Old::get_gpu(int device_id) 
+{
+    assert(id_to_gpu.find(device_id) != id_to_gpu.end());
+    return id_to_gpu[device_id];
+}
+
+Mem_device *Machine_Old::get_sys_mem(int node_id) 
+{
+    assert(id_to_sys_mem.find(node_id) != id_to_sys_mem.end());
+    return id_to_sys_mem[node_id];
+}
+
+Mem_device *Machine_Old::get_gpu_fb_mem(int device_id) 
+{
+    assert(id_to_gpu_fb_mem.find(device_id) != id_to_gpu_fb_mem.end());
+    return id_to_gpu_fb_mem[device_id];
+}
+
+vector<Comm_device *> Machine_Old::get_comm_path(Mem_device *src_mem, Mem_device *tar_mem)
+{
+    vector<Comm_device *> ret;
+    // on the same memory
+    if (src_mem->device_id == tar_mem->device_id) {
+        return ret;
+    }
+    if (src_mem->mem_type == Mem_device::SYSTEM_MEM and tar_mem->mem_type == Mem_device::SYSTEM_MEM) {
+        if (src_mem->node_id == tar_mem->node_id) {
+            return ret;
+        }
+        else {
+            int device_id = src_mem->node_id * num_nodes + tar_mem->node_id;
+            ret.emplace_back(ids_to_inter_node_comm_device[device_id]);
+        }
+    }
+    else if (src_mem->mem_type == Mem_device::GPU_FB_MEM and tar_mem->mem_type == Mem_device::GPU_FB_MEM) {
+        if (src_mem->node_id == tar_mem->node_id) {
+            int device_id = src_mem->device_id * total_num_gpus + tar_mem->device_id;
+            ret.emplace_back(ids_to_inter_gpu_comm_device[device_id]);
+        }
+        else {
+            ret.emplace_back(id_to_gputodram_comm_device[src_mem->device_id]);
+            int device_id = src_mem->node_id * num_nodes + tar_mem->node_id;
+            ret.emplace_back(ids_to_inter_node_comm_device[device_id]);
+            ret.emplace_back(id_to_dramtogpu_comm_device[tar_mem->device_id]);
+        }
+    }
+    else if (src_mem->mem_type == Mem_device::SYSTEM_MEM and tar_mem->mem_type == Mem_device::GPU_FB_MEM) {
+        if (src_mem->node_id == tar_mem->node_id) {
+            ret.emplace_back(id_to_dramtogpu_comm_device[tar_mem->device_id]);
+        }
+        else {
+            int device_id = src_mem->node_id * num_nodes + tar_mem->node_id;
+            ret.emplace_back(ids_to_inter_node_comm_device[device_id]);
+            ret.emplace_back(id_to_dramtogpu_comm_device[tar_mem->device_id]);
+        }
+    }
+    else if (src_mem->mem_type == Mem_device::GPU_FB_MEM and tar_mem->mem_type == Mem_device::SYSTEM_MEM) {
+        if (src_mem->node_id == tar_mem->node_id) {
+            ret.emplace_back(id_to_gputodram_comm_device[src_mem->device_id]);
+        }
+        else {
+            ret.emplace_back(id_to_gputodram_comm_device[src_mem->device_id]);
+            int device_id = src_mem->node_id * num_nodes + tar_mem->node_id;
+            ret.emplace_back(ids_to_inter_node_comm_device[device_id]);
+        }
+    }
+    else {
+        cout << "No path found between " << src_mem->name << " and " << tar_mem->name << endl;
+    }
+
+    return ret;
+}
+
+
+
 
 // class Task
 Task::Task(string name, Device *device) 
@@ -571,12 +716,13 @@ void Simulator::add_dependency(Task *prev_task, Task *cur_task)
 void Simulator::simulate()
 {
     srand(time(NULL));
-    bool measure_main_loop = false;
+    bool measure_main_loop = true;
     float main_loop_start = std::numeric_limits<float>::max();
     float main_loop_stop = 0.0f;
     float sim_time = 0.0f;
     float comp_time = 0.0f;
     float comm_time = 0.0f;
+    int op_node_count = 0;
     unordered_map<Device*, float> device_times;
     while (!ready_queue.empty()) {
         // Find the task with the earliest start time
@@ -605,7 +751,10 @@ void Simulator::simulate()
             main_loop_start = fminf(main_loop_start, start_time);
             main_loop_stop = fmaxf(main_loop_stop, end_time);
         }
-        cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
+        if (starts_with(cur_task->name, "op_node_")) {
+            op_node_count++;
+            cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
+        }
         if (end_time > sim_time)
             sim_time = end_time;
         for (size_t i = 0; i < cur_task->next_tasks.size(); i++) {
@@ -623,6 +772,7 @@ void Simulator::simulate()
     cout << "sim_time " << sim_time << "ms" << endl;
     cout << "total_comp_time " << comp_time << "ms" << endl;
     cout << "total_comm_time " << comm_time << "ms" << endl;
+    cout << "op_node_count " << op_node_count << endl;
     return;
 }
 

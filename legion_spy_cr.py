@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright 2020 Stanford University, NVIDIA Corporation
 #
@@ -215,7 +215,7 @@ def check_preconditions(preconditions, op):
     return None
 
 # Borrowed from stack overflow 3173320
-def print_progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '-'):
+def print_progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '|'):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -2645,9 +2645,12 @@ class IndexSpace(object):
             if not update.empty():
                 self.shape |= update
 
-    def update_index_sets(self, index_sets):
+    def update_index_sets(self, index_sets, done, total_spaces):
+        done += 1
         if self.shape is None or self.shape.empty():
-            return
+            if not self.state.verbose:
+                print_progress_bar(done, total_spaces, length=50)
+            return done
         if self.state.verbose:
             print('    Reducing index sub-space %s' % self)
         local_points = self.shape.copy()
@@ -2686,10 +2689,13 @@ class IndexSpace(object):
         if not local_points.empty():
             index_set = set()
             index_set.add(self)
-            index_sets[local_points] = index_set   
+            index_sets[local_points] = index_set
+        if not self.state.verbose:
+            print_progress_bar(done, total_spaces, length=50)
         # Traverse the children
         for child in itervalues(self.children):
-            child.update_index_sets(index_sets)                
+            done = child.update_index_sets(index_sets, done, total_spaces)
+        return done
 
     def add_refined_point(self, point):
         if self.point_set is None:
@@ -2714,14 +2720,16 @@ class IndexSpace(object):
         for child in itervalues(self.children):
             child.check_partition_properties()
 
-    def compute_reduced_shapes(self, dim_sets):
+    def compute_reduced_shapes(self, dim_sets, done, total_spaces):
         if self.shape is None or self.shape.empty():
-            return
+            if not self.state.verbose:
+                print_progress_bar(done+1, total_spaces, length=50)
+            return done + 1
         if self.state.verbose:
             print('Reducing %s ...' % self)
         if self.shape.get_dim() not in dim_sets:
             dim_sets[self.shape.get_dim()] = dict()
-        self.update_index_sets(dim_sets[self.shape.get_dim()])
+        return self.update_index_sets(dim_sets[self.shape.get_dim()], done, total_spaces)
 
     def are_all_children_disjoint(self):
         return False
@@ -2918,9 +2926,10 @@ class IndexPartition(object):
                 if self.state.assert_on_warning:
                     assert False
 
-    def update_index_sets(self, index_sets):
+    def update_index_sets(self, index_sets, done, total_spaces):
         for child in itervalues(self.children):
-            child.update_index_sets(index_sets)
+            done = child.update_index_sets(index_sets, done, total_spaces)
+        return done
 
     def are_all_children_disjoint(self):
         return self.disjoint
@@ -5653,7 +5662,7 @@ class Operation(object):
         if self.name is None:
             return OpNames[self.kind] + " " + str(self.uid)
         else:
-            return self.name
+            return self.name + '(' + str(self.uid) + ')'
 
     __repr__ = __str__
 
@@ -7833,25 +7842,25 @@ class Operation(object):
     def print_incoming_event_edges(self, printer):
         if self.cluster_name is not None:
             for src in self.physical_incoming:
-                if src.cluster_name is not None:
-                    printer.println(src.node_name+' -> '+self.node_name+
-                            ' [ltail='+src.cluster_name+',lhead='+
-                            self.cluster_name+',style=solid,color=red,'+
-                            'penwidth=2];')
-                else:
-                    printer.println(src.node_name+' -> '+self.node_name+
-                            ' [lhead='+self.cluster_name+',style=solid,'+
-                            'color=red,penwidth=2];')
+                # if src.cluster_name is not None:
+                #     printer.println(src.node_name+' -> '+self.node_name+
+                #             ' [ltail='+src.cluster_name+',lhead='+
+                #             self.cluster_name+',style=solid,color=red,'+
+                #             'penwidth=2];')
+                # else:
+                #     printer.println(src.node_name+' -> '+self.node_name+
+                #             ' [lhead='+self.cluster_name+',style=solid,'+
+                #             'color=red,penwidth=2];')
                 output_deps.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
         else:
             for src in self.physical_incoming:
-                if src.cluster_name is not None:
-                    printer.println(src.node_name+' -> '+self.node_name+
-                            ' [ltail='+src.cluster_name+',style=solid,'+
-                            'color=red,penwidth=2];')
-                else:
-                    printer.println(src.node_name+' -> '+self.node_name+
-                            ' [style=solid,color=red,penwidth=2];')
+                # if src.cluster_name is not None:
+                #     printer.println(src.node_name+' -> '+self.node_name+
+                #             ' [ltail='+src.cluster_name+',style=solid,'+
+                #             'color=red,penwidth=2];')
+                # else:
+                #     printer.println(src.node_name+' -> '+self.node_name+
+                #             ' [style=solid,color=red,penwidth=2];')
                 output_deps.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
 
     def print_eq_node(self, printer, eq_key):
@@ -8465,14 +8474,17 @@ class Task(object):
                     op.print_phase_barrier_edges(printer)
             index_map = dict()
             reachable = dict()
+            count = 0
             total_nodes = len(all_ops)
             # Now traverse the list in reverse order
-            for src_index in xrange(total_nodes-1,-1,-1):
+            for src_index in xrange(total_nodes-1,-1,-1): 
                 src = all_ops[src_index]
+                count += 1 
                 index_map[src] = src_index
                 our_reachable = NodeSet(total_nodes)
                 reachable[src] = our_reachable
                 if src.logical_outgoing is None or len(src.logical_outgoing) == 0:
+                    print_progress_bar(count, total_nodes, length=50)
                     continue
                 # Otherwise iterate through our outgoing edges and get the set of 
                 # nodes reachable from all of them
@@ -8511,6 +8523,7 @@ class Task(object):
                         continue
                     printer.println(src.node_name+' -> '+dst.node_name+
                                     ' [style=solid,color=black,penwidth=2];')
+                print_progress_bar(count, total_nodes, length=50)
             print("Done")
         else:
             previous_pairs = set()
@@ -9628,13 +9641,13 @@ class RealmBase(object):
 
     def print_incoming_event_edges(self, printer):
         for src in self.physical_incoming:
-            if src.cluster_name is not None:
-                printer.println(src.node_name+' -> '+self.node_name+
-                            ' [ltail='+src.cluster_name+',style=solid,'+
-                            'color=red,penwidth=2];')
-            else:
-                printer.println(src.node_name+' -> '+self.node_name+
-                        ' [style=solid,color=red,penwidth=2];')
+            # if src.cluster_name is not None:
+            #     printer.println(src.node_name+' -> '+self.node_name+
+            #                 ' [ltail='+src.cluster_name+',style=solid,'+
+            #                 'color=red,penwidth=2];')
+            # else:
+            #     printer.println(src.node_name+' -> '+self.node_name+
+            #             ' [style=solid,color=red,penwidth=2];')
             output_deps.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
 
     def print_eq_node(self, printer, eq_key):
@@ -11282,6 +11295,7 @@ def parse_legion_spy_line(line, state):
         op.set_task_id(int(m.group('tid')))
         context = state.get_task(int(m.group('ctx')))
         op.set_context(context)
+        output_test.write(op.name + " " + str(op.uid) + '\n')
         return True
     m = index_task_pat.match(line)
     if m is not None:
@@ -11874,9 +11888,13 @@ class State(object):
         # Have to do the same sets across all index spaces
         # with the same dimensions in case of copy across
         dim_sets = dict()
+        done = 0
+        total_spaces = len(self.index_spaces)
         for space in itervalues(self.index_spaces):
             if space.parent is None:
-                space.compute_reduced_shapes(dim_sets)            
+                done = space.compute_reduced_shapes(dim_sets, done, total_spaces)
+        print('Done')
+        print('Computing refinement points...')
         for dim,index_sets in iteritems(dim_sets):
             point_value = 0
             total_sets = len(index_sets)
@@ -12055,7 +12073,8 @@ class State(object):
                 print('Simplifying node %s %d of %d' % (str(src), count, total_nodes)) 
             index_map[src] = count
             count += 1
-            print_progress_bar(count, total_nodes, length=50)
+            if not self.verbose:
+                print_progress_bar(count, total_nodes, length=50)
             # Create our reachability set and store it
             our_reachable = NodeSet(total_nodes)
             reachable[src] = our_reachable
@@ -12177,22 +12196,40 @@ class State(object):
                     assert len(dst.physical_incoming) == 1
                     ready_nodes.append(dst)
         # Seed the incoming sets with the roots
+        count = 0
+        total_nodes = len(self.unique_ops) + len(self.copies) + \
+                        len(self.fills) + len(self.depparts)
         for op in self.unique_ops:
             if not op.physical_incoming:
                 process_node(op)
+                if not self.verbose:
+                    count += 1
+                    print_progress_bar(count, total_nodes, length=50)
         for copy in itervalues(self.copies):
             if not copy.physical_incoming:
                 process_node(copy)
+                if not self.verbose:
+                    count += 1
+                    print_progress_bar(count, total_nodes, length=50)
         for fill in itervalues(self.fills):
             if not fill.physical_incoming:
                 process_node(fill)
+                if not self.verbose:
+                    count += 1
+                    print_progress_bar(count, total_nodes, length=50)
         for deppart in itervalues(self.depparts):
             if not deppart.physical_incoming:
                 process_node(deppart)
+                if not self.verbose:
+                    count += 1
+                    print_progress_bar(count, total_nodes, length=50)
         # Iterate until we've walked the whole graph O(V + E)
         while ready_nodes:
             node = ready_nodes.popleft()
             process_node(node)
+            if not self.verbose:
+                count += 1
+                print_progress_bar(count, total_nodes, length=50)
         # The pending nodes should be empty by the time we are done with this
         print('Done')
         print('Simplifying equivalence event graphs...')
@@ -12235,7 +12272,8 @@ class State(object):
                         (str(src), count, total_nodes)) 
             index_map[src] = count
             count += 1
-            print_progress_bar(count, total_nodes, length=50)
+            if not self.verbose:
+                print_progress_bar(count, total_nodes, length=50)
             # Create our reachability dict
             our_reachable = dict()
             reachable[src] = our_reachable
@@ -12492,6 +12530,9 @@ class State(object):
         all_nodes = set()
         op.print_event_graph(printer, elevate, all_nodes, True) 
         # Now print the edges at the very end
+        print("!!!!!!!!!!!!!!")
+        print(all_nodes)
+        print("!!!!!!!!!!!!!!")
         for node in all_nodes:
             node.print_incoming_event_edges(printer) 
         printer.print_pdf_after_close(False, zoom_graphs)
@@ -12952,6 +12993,8 @@ def main(temp_dir):
     output_comm = open("comm","w+")
     global output_deps
     output_deps = open("deps","w+")
+    global output_test
+    output_test = open("test","w+")
 
     class MyParser(argparse.ArgumentParser):
         def error(self, message):
@@ -13189,10 +13232,11 @@ def main(temp_dir):
             subprocess.check_call('cp '+temp_dir+'* .',shell=True)
         except:
             print('WARNING: Unable to copy temporary files into current directory')
-    
+
     output_comp.close()
     output_comm.close()
     output_deps.close()
+    output_test.close()
 
 if __name__ == "__main__":
     temp_dir = tempfile.mkdtemp()+'/'
