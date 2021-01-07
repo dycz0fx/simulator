@@ -9648,7 +9648,7 @@ class RealmBase(object):
             # else:
             #     printer.println(src.node_name+' -> '+self.node_name+
             #             ' [style=solid,color=red,penwidth=2];')
-            output_deps.write('deps: ' + src.node_name+' -> '+self.node_name + "\n")
+            output_deps.write('deps: ' + src.node_name+' -> ' + self.node_name + "\n")
 
     def print_eq_node(self, printer, eq_key):
         pass
@@ -12322,6 +12322,7 @@ class State(object):
         # task from different nodes, merge them into
         # the one from the original node (e.g. the
         # one with the context)
+        output_alias.write('alias: ' + str(p1.op.uid) + ' ' + str(p2.op.uid) + '\n')
         if p1.op.context:
             assert not p2.op.context
             p1.op.merge(p2.op)
@@ -12344,6 +12345,7 @@ class State(object):
         # is the one that appears in the Realm event graph
         # We know it is the one that ran because it will 
         # have a processor
+        output_alias.write('alias: ' + str(p1.op.uid) + ' ' + str(p2.op.uid) + '\n')
         if p1.processor:
             assert not p2.processor
             # Merge the operations first 
@@ -12993,6 +12995,8 @@ def main(temp_dir):
     output_comm = open("comm","w+")
     global output_deps
     output_deps = open("deps","w+")
+    global output_alias
+    output_alias = open("alias","w+")
     global output_test
     output_test = open("test","w+")
 
@@ -13236,6 +13240,7 @@ def main(temp_dir):
     output_comp.close()
     output_comm.close()
     output_deps.close()
+    output_alias.close()
     output_test.close()
 
 if __name__ == "__main__":

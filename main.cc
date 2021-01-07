@@ -165,12 +165,18 @@ std::unordered_map<std::string, pair<int, int>> gpu_id_map;
 Machine_Sherlock *create_machine_model_sherlock()
 {
     Machine_Sherlock *machine = new Machine_Sherlock(4, 2, 10, 2);
-    machine->add_membuses(0.00003, 8.75 * 1024 * 1024);     // ms, KB/s
-    machine->add_upis(0.0003965, 6.65753 * 1024 * 1024);
-    machine->add_nics(0.000507, 20.9545 * 1024 * 1024);
-    machine->add_pcis(0.001, 13.2 * 2 * 1024 * 1024);
-    machine->add_nvlinks(6, 0.001, 18.52 * 1024 * 1024);
+    // machine->add_membuses(0.00003, 8.75 * 1024 * 1024);     // ms, KB/s
+    // machine->add_upis(0.0003965, 6.65753 * 1024 * 1024);
+    // machine->add_nics(0.000507, 20.9545 * 1024 * 1024);
+    // machine->add_pcis(0.001, 13.2 * 1024 * 1024);
+    // machine->add_nvlinks(6, 0.001, 18.52 * 1024 * 1024);
     
+    machine->add_membuses(0.00003, 8.75 * 1024 * 1024);     // ms, KB/s
+    machine->add_upis(0.0003965, 6.30894 * 2 * 1024 * 1024);
+    machine->add_nics(0.000507, 13.58 * 2 * 1024 * 1024);
+    machine->add_pcis(0.001, 12.21156875 * 1024 * 1024);
+    machine->add_nvlinks(6, 0.001, 18.52 * 1024 * 1024);
+
     // set up cpu_id_map: socket_id, local_id
     {
     cpu_id_map["0x1d00000000000000"] = {0, 0};
@@ -422,6 +428,22 @@ void run_dag_file(int argc, char **argv)
     unordered_map<string, int> messages_map;
     unordered_set<string> left;
     unordered_set<string> right;
+    unordered_map<int, int> alias_map; 
+    // get alias
+    std::ifstream alias_file(folder + "/alias");
+    if (alias_file.is_open()) {
+        std::string line;
+        while (std::getline(alias_file, line)) {
+            vector<string> line_array = split(line, " ");
+            if (line_array[0] == "alias:") {
+                int t0 = stoi(line_array[1]);
+                int t1 = stoi(line_array[2]);
+                alias_map[t0] = t1;
+                alias_map[t1] = t0;
+            }
+        }
+    }
+
     // get comp tasks
     std::ifstream comp_file(folder + "/comp");
     if (comp_file.is_open()) {
@@ -441,8 +463,8 @@ void run_dag_file(int argc, char **argv)
                 Comp_device *comp_device = nullptr;
                 Mem_device *mem_device = nullptr;
                 for (int i = 0; i < line_array.size(); i++) {
-                    if ((line_array[1] == "Load" and line_array[2] == "Input" and line_array[3] == "Task") or 
-                        (line_array[1] == "SGD" and line_array[2] == "Update" and line_array[3] == "Task")) {
+                    if ((line_array[1] == "Load" and line_array[2] == "Input") or 
+                        (line_array[1] == "SGD" and line_array[2] == "Update")) {
                         is_main = true;
                     }
                     if (line_array[i] == "(UID:") {
@@ -470,7 +492,15 @@ void run_dag_file(int argc, char **argv)
                     }
                 }
                 string task_name = "op_node_" + to_string(task_id);
-                Task *cur_task = simulator.new_comp_task(task_name, comp_device, cost_map[task_id], mem_device);
+                float cost = 0.0;
+                if (cost_map.find(task_id) != cost_map.end()) {
+                    cost = cost_map[task_id];
+                }
+                else {
+                    cost = cost_map[alias_map[task_id]];
+                    cout << "========= task " << task_id << " has alias " << alias_map[task_id] << " with cost " << cost << endl;
+                }
+                Task *cur_task = simulator.new_comp_task(task_name, comp_device, cost, mem_device);
                 cur_task->is_main = is_main;
                 // cout << cur_task->to_string() << endl;
                 comp_tasks_map[task_name] = cur_task;
@@ -620,11 +650,43 @@ void test_comm()
     Machine_Sherlock *machine = create_machine_model_sherlock();
     //Machine_Old *machine = create_machine_model_old();
     Simulator simulator((Machine *) machine);
-    string src_task_name = "src_task";
-    int src_socket_id = 0;
-    int src_local_id = 0;
-    simulator.new_comp_task(src_task_name, machine->get_cpu(src_socket_id, src_local_id), 0, machine->get_sys_mem(src_socket_id));
-    
+    int num_nodes = 2;
+    int num_sockets_per_node = 2;
+    int num_cpus_per_socket = 10;
+    int num_gpus_per_socket = 2;
+
+    int iters = 1;
+    vector<Task *> comp_tasks;
+    for (int i = 0; i < num_nodes; i++) {
+        for (int j = 0; j < num_sockets_per_node; j++) {
+            for (int k = 0; k < num_cpus_per_socket; k++) {
+                int socket_id = i * num_sockets_per_node + j;
+                int task_id = socket_id * num_cpus_per_socket + k;
+                string task_name = "comp_task " + to_string(task_id) + " on socket " + to_string(socket_id) + " cpu " + to_string(k);
+                float run_time = 0;
+                comp_tasks.emplace_back(simulator.new_comp_task(task_name, machine->get_cpu(socket_id, k), run_time, machine->get_sys_mem(socket_id)));
+            }
+        }
+    }
+
+    for (int i = 0; i < num_nodes; i++) {
+        for (int j = 0; j < num_sockets_per_node; j++) {
+            for (int k = 0; k < num_gpus_per_socket; k++) {
+                int socket_id = i * num_sockets_per_node + j;
+                int task_id = socket_id * num_gpus_per_socket + k;
+                string task_name = "comp_task " + to_string(task_id) + " on socket " + to_string(socket_id) + " gpu " + to_string(k);;
+                float run_time = 0;
+                comp_tasks.emplace_back(simulator.new_comp_task(task_name, machine->get_gpu(task_id), run_time, machine->get_gpu_fb_mem(task_id)));
+            }
+        }
+    }
+
+    Task *src = comp_tasks[0];
+    Task *tar = comp_tasks[44];
+    int message_size = 64 << 20;
+    simulator.enter_ready_queue(src);
+    simulator.new_comm_task(src, tar, message_size);
+    simulator.simulate();
 }
 
 int main(int argc, char **argv)
@@ -632,6 +694,7 @@ int main(int argc, char **argv)
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     run_dag_file(argc, argv);
     // stencil_1d_gpu();
+    // test_comm();
     std::chrono::steady_clock::time_point stop = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
     cout << "simulator runs: " << time_span.count() << " seconds" <<  endl;

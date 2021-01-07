@@ -63,6 +63,7 @@ public:
         UPI_OUT_COMM,
         NIC_IN_COMM,
         NIC_OUT_COMM,
+        //TODO:change PCI_IN to PCI_TO_MEM, PCI_OUT to PCI_TO_DEV
         PCI_IN_COMM,
         PCI_OUT_COMM,
         NVLINK_COMM,

@@ -151,10 +151,10 @@ void Machine_Sherlock::add_pcis(float latency, float bandwidth)
             int socket_id = i * num_sockets_per_node + j;
             int device_id = socket_id;
             string pci_in_name = "PCI_IN " + std::to_string(device_id);    // pcie to memory
-            Comm_device *pci_in = new Comm_device(pci_in_name, Comm_device::PCI_IN_COMM, node_id, socket_id, socket_id, 0.001, 13.2 * 2 * 1024 * 1024);
+            Comm_device *pci_in = new Comm_device(pci_in_name, Comm_device::PCI_IN_COMM, node_id, socket_id, socket_id, latency, bandwidth);
             pci_ins.push_back(pci_in);
             string pci_out_name = "PCI_OUT " + std::to_string(device_id);  // memory to pcie
-            Comm_device *pci_out = new Comm_device(pci_out_name, Comm_device::PCI_OUT_COMM, node_id, socket_id, socket_id, 0.001, 13.2 * 2 * 1024 * 1024);
+            Comm_device *pci_out = new Comm_device(pci_out_name, Comm_device::PCI_OUT_COMM, node_id, socket_id, socket_id, latency, bandwidth);
             pci_outs.push_back(pci_out);
         }
     }    
@@ -268,7 +268,7 @@ vector<Comm_device *> Machine_Sherlock::get_comm_path(Mem_device *src_mem, Mem_d
 {
     vector<Comm_device *> ret;
     // on the same memory
-    if (src_mem->device_id == tar_mem->device_id) {
+    if (src_mem->mem_type == tar_mem->mem_type and src_mem->device_id == tar_mem->device_id) {
         return ret;
     }
     if ((src_mem->mem_type == Mem_device::SYSTEM_MEM and tar_mem->mem_type == Mem_device::SYSTEM_MEM) or
@@ -288,6 +288,7 @@ vector<Comm_device *> Machine_Sherlock::get_comm_path(Mem_device *src_mem, Mem_d
         else {
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
+            ret.emplace_back(membuses[tar_mem->socket_id]);
         }
     }
     else if (src_mem->mem_type == Mem_device::GPU_FB_MEM and tar_mem->mem_type == Mem_device::GPU_FB_MEM) {
@@ -319,7 +320,7 @@ vector<Comm_device *> Machine_Sherlock::get_comm_path(Mem_device *src_mem, Mem_d
         }
         // on different nodes
         else {
-            ret.emplace_back(membuses[src_mem->socket_id]);
+            //ret.emplace_back(membuses[src_mem->socket_id]);
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
             ret.emplace_back(pci_outs[tar_mem->socket_id]);            
@@ -340,7 +341,7 @@ vector<Comm_device *> Machine_Sherlock::get_comm_path(Mem_device *src_mem, Mem_d
         }
         // on different nodes
         else {
-            ret.emplace_back(pci_ins[src_mem->socket_id]);            
+            ret.emplace_back(pci_ins[src_mem->socket_id]);  
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
             ret.emplace_back(membuses[tar_mem->socket_id]);
@@ -380,6 +381,7 @@ vector<Comm_device *> Machine_Sherlock::get_comm_path(Mem_device *src_mem, Mem_d
             ret.emplace_back(pci_ins[src_mem->socket_id]);            
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
+            ret.emplace_back(membuses[tar_mem->socket_id]);
         }
     }
     else {
@@ -528,7 +530,7 @@ vector<Comm_device *> Machine_Old::get_comm_path(Mem_device *src_mem, Mem_device
 {
     vector<Comm_device *> ret;
     // on the same memory
-    if (src_mem->device_id == tar_mem->device_id) {
+    if (src_mem->mem_type == tar_mem->mem_type and src_mem->device_id == tar_mem->device_id) {
         return ret;
     }
     if (src_mem->mem_type == Mem_device::SYSTEM_MEM and tar_mem->mem_type == Mem_device::SYSTEM_MEM) {
@@ -722,7 +724,6 @@ void Simulator::simulate()
     float sim_time = 0.0f;
     float comp_time = 0.0f;
     float comm_time = 0.0f;
-    int op_node_count = 0;
     unordered_map<Device*, float> device_times;
     while (!ready_queue.empty()) {
         // Find the task with the earliest start time
@@ -751,10 +752,7 @@ void Simulator::simulate()
             main_loop_start = fminf(main_loop_start, start_time);
             main_loop_stop = fmaxf(main_loop_stop, end_time);
         }
-        if (starts_with(cur_task->name, "op_node_")) {
-            op_node_count++;
-            cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
-        }
+        //cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
         if (end_time > sim_time)
             sim_time = end_time;
         for (size_t i = 0; i < cur_task->next_tasks.size(); i++) {
@@ -772,7 +770,6 @@ void Simulator::simulate()
     cout << "sim_time " << sim_time << "ms" << endl;
     cout << "total_comp_time " << comp_time << "ms" << endl;
     cout << "total_comm_time " << comm_time << "ms" << endl;
-    cout << "op_node_count " << op_node_count << endl;
     return;
 }
 
