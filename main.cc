@@ -165,16 +165,10 @@ std::unordered_map<std::string, pair<int, int>> gpu_id_map;
 Machine_Sherlock *create_machine_model_sherlock()
 {
     Machine_Sherlock *machine = new Machine_Sherlock(4, 2, 10, 2);
-    // machine->add_membuses(0.00003, 8.75 * 1024 * 1024);     // ms, KB/s
-    // machine->add_upis(0.0003965, 6.65753 * 1024 * 1024);
-    // machine->add_nics(0.000507, 20.9545 * 1024 * 1024);
-    // machine->add_pcis(0.001, 13.2 * 1024 * 1024);
-    // machine->add_nvlinks(6, 0.001, 18.52 * 1024 * 1024);
-    
-    machine->add_membuses(0.00003, 8.75 * 1024 * 1024);     // ms, KB/s
-    machine->add_upis(0.0003965, 6.30894 * 2 * 1024 * 1024);
-    machine->add_nics(0.000507, 13.58 * 2 * 1024 * 1024);
-    machine->add_pcis(0.001, 12.21156875 * 1024 * 1024);
+    machine->add_membuses(0.00003, 3.9 * 1024 * 1024);     // ms, KB/s
+    machine->add_upis(0.0003965, 6.86429 * 2 * 1024 * 1024);
+    machine->add_nics(0.000507, 6.49488 * 2 * 1024 * 1024);
+    machine->add_pcis(0.001, 12.578468749999999 * 1024 * 1024);
     machine->add_nvlinks(6, 0.001, 18.52 * 1024 * 1024);
 
     // set up cpu_id_map: socket_id, local_id
@@ -682,7 +676,7 @@ void test_comm()
     }
 
     Task *src = comp_tasks[0];
-    Task *tar = comp_tasks[44];
+    Task *tar = comp_tasks[47];
     int message_size = 64 << 20;
     simulator.enter_ready_queue(src);
     simulator.new_comm_task(src, tar, message_size);
@@ -692,9 +686,9 @@ void test_comm()
 int main(int argc, char **argv)
 {
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    run_dag_file(argc, argv);
+    // run_dag_file(argc, argv);
     // stencil_1d_gpu();
-    // test_comm();
+    test_comm();
     std::chrono::steady_clock::time_point stop = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
     cout << "simulator runs: " << time_span.count() << " seconds" <<  endl;

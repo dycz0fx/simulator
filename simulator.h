@@ -6,8 +6,8 @@
 #include <time.h>
 #include <boost/functional/hash.hpp>
 
-#define SEG_SIZE 262144
-#define MAX_NUM_SEGS 1
+#define SEG_SIZE 16777216
+#define MAX_NUM_SEGS 10
 #define LEGION_OVERHEAD 0
 class Device
 {
@@ -101,8 +101,8 @@ private:
     std::vector<Comm_device *> upi_outs;            // socket_id
     std::vector<Comm_device *> nic_ins;             // socket_id
     std::vector<Comm_device *> nic_outs;            // socket_id
-    std::vector<Comm_device *> pci_ins;             // from gpu to main memory, socket_id
-    std::vector<Comm_device *> pci_outs;            // from main memory to gpu, socket_id
+    std::vector<Comm_device *> pcis_to_host;             // from gpu to main memory, socket_id
+    std::vector<Comm_device *> pcis_to_device;            // from main memory to gpu, socket_id
     std::vector<std::vector<Comm_device *>> nvlinks;    // node_id, local_id
     std::unordered_map<std::pair<int, int>, Comm_device *, boost::hash<std::pair<int, int>>> mem_to_nvlink;
     void add_cpus();

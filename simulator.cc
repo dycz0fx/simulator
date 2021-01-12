@@ -152,10 +152,10 @@ void Machine_Sherlock::add_pcis(float latency, float bandwidth)
             int device_id = socket_id;
             string pci_in_name = "PCI_IN " + std::to_string(device_id);    // pcie to memory
             Comm_device *pci_in = new Comm_device(pci_in_name, Comm_device::PCI_IN_COMM, node_id, socket_id, socket_id, latency, bandwidth);
-            pci_ins.push_back(pci_in);
+            pcis_to_host.push_back(pci_in);
             string pci_out_name = "PCI_OUT " + std::to_string(device_id);  // memory to pcie
             Comm_device *pci_out = new Comm_device(pci_out_name, Comm_device::PCI_OUT_COMM, node_id, socket_id, socket_id, latency, bandwidth);
-            pci_outs.push_back(pci_out);
+            pcis_to_device.push_back(pci_out);
         }
     }    
 }
@@ -288,7 +288,6 @@ vector<Comm_device *> Machine_Sherlock::get_comm_path(Mem_device *src_mem, Mem_d
         else {
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
-            ret.emplace_back(membuses[tar_mem->socket_id]);
         }
     }
     else if (src_mem->mem_type == Mem_device::GPU_FB_MEM and tar_mem->mem_type == Mem_device::GPU_FB_MEM) {
@@ -299,89 +298,82 @@ vector<Comm_device *> Machine_Sherlock::get_comm_path(Mem_device *src_mem, Mem_d
         }
         // on different nodes
         else {
-            ret.emplace_back(pci_ins[src_mem->socket_id]);
+            ret.emplace_back(pcis_to_host[src_mem->socket_id]);
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
-            ret.emplace_back(pci_outs[tar_mem->socket_id]);
+            ret.emplace_back(pcis_to_device[tar_mem->socket_id]);
         }
     }
     else if (src_mem->mem_type == Mem_device::SYSTEM_MEM and tar_mem->mem_type == Mem_device::GPU_FB_MEM) {
         // on the same socket
         if (src_mem->socket_id == tar_mem->socket_id) {
-            ret.emplace_back(membuses[tar_mem->socket_id]);
-            ret.emplace_back(pci_outs[tar_mem->socket_id]);
+            ret.emplace_back(pcis_to_device[tar_mem->socket_id]);
         }
         // on the same node
         else if (src_mem->node_id == tar_mem->node_id) {
-            ret.emplace_back(membuses[src_mem->socket_id]);
             ret.emplace_back(upi_outs[src_mem->socket_id]);
             ret.emplace_back(upi_ins[tar_mem->socket_id]);
-            ret.emplace_back(pci_outs[tar_mem->socket_id]);
+            ret.emplace_back(pcis_to_device[tar_mem->socket_id]);
         }
         // on different nodes
         else {
-            //ret.emplace_back(membuses[src_mem->socket_id]);
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
-            ret.emplace_back(pci_outs[tar_mem->socket_id]);            
+            ret.emplace_back(pcis_to_device[tar_mem->socket_id]);            
         }
     }
     else if (src_mem->mem_type == Mem_device::GPU_FB_MEM and tar_mem->mem_type == Mem_device::SYSTEM_MEM) {
         // on the same socket
         if (src_mem->socket_id == tar_mem->socket_id) {
-            ret.emplace_back(pci_ins[tar_mem->socket_id]);
-            ret.emplace_back(membuses[tar_mem->socket_id]);
+            ret.emplace_back(pcis_to_host[tar_mem->socket_id]);
         }
         // on the same node
         if (src_mem->node_id == tar_mem->node_id) {
-            ret.emplace_back(pci_ins[src_mem->socket_id]);
+            ret.emplace_back(pcis_to_host[src_mem->socket_id]);
             ret.emplace_back(upi_outs[src_mem->socket_id]);
             ret.emplace_back(upi_ins[tar_mem->socket_id]);
-            ret.emplace_back(membuses[tar_mem->socket_id]);
         }
         // on different nodes
         else {
-            ret.emplace_back(pci_ins[src_mem->socket_id]);  
+            ret.emplace_back(pcis_to_host[src_mem->socket_id]);  
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
-            ret.emplace_back(membuses[tar_mem->socket_id]);
         }
     }
     else if (src_mem->mem_type == Mem_device::Z_COPY_MEM and tar_mem->mem_type == Mem_device::GPU_FB_MEM) {
         // on the same socket
         if (src_mem->socket_id == tar_mem->socket_id) {
-            ret.emplace_back(pci_outs[tar_mem->socket_id]);
+            ret.emplace_back(pcis_to_device[tar_mem->socket_id]);
         }
         // on the same node
         else if (src_mem->node_id == tar_mem->node_id) {
             ret.emplace_back(upi_outs[src_mem->socket_id]);
             ret.emplace_back(upi_ins[tar_mem->socket_id]);
-            ret.emplace_back(pci_outs[tar_mem->socket_id]);
+            ret.emplace_back(pcis_to_device[tar_mem->socket_id]);
         }
         // on different nodes
         else {
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
-            ret.emplace_back(pci_outs[tar_mem->socket_id]);            
+            ret.emplace_back(pcis_to_device[tar_mem->socket_id]);            
         }
     }
     else if (src_mem->mem_type == Mem_device::GPU_FB_MEM and tar_mem->mem_type == Mem_device::Z_COPY_MEM) {
         // on the same socket
         if (src_mem->socket_id == tar_mem->socket_id) {
-            ret.emplace_back(pci_ins[tar_mem->socket_id]);
+            ret.emplace_back(pcis_to_host[tar_mem->socket_id]);
         }
         // on the same node
         if (src_mem->node_id == tar_mem->node_id) {
-            ret.emplace_back(pci_ins[src_mem->socket_id]);
+            ret.emplace_back(pcis_to_host[src_mem->socket_id]);
             ret.emplace_back(upi_outs[src_mem->socket_id]);
             ret.emplace_back(upi_ins[tar_mem->socket_id]);
         }
         // on different nodes
         else {
-            ret.emplace_back(pci_ins[src_mem->socket_id]);            
+            ret.emplace_back(pcis_to_host[src_mem->socket_id]);            
             ret.emplace_back(nic_outs[src_mem->socket_id]);
             ret.emplace_back(nic_ins[tar_mem->socket_id]);
-            ret.emplace_back(membuses[tar_mem->socket_id]);
         }
     }
     else {
@@ -423,8 +415,8 @@ string Machine_Sherlock::to_string()
             s += upi_outs[socket_id]->name + '\n';
             s += nic_ins[socket_id]->name + '\n';
             s += nic_outs[socket_id]->name + '\n';
-            s += pci_ins[socket_id]->name + '\n';
-            s += pci_outs[socket_id]->name + '\n';
+            s += pcis_to_host[socket_id]->name + '\n';
+            s += pcis_to_device[socket_id]->name + '\n';
         }
         s += "------------------------------------------\n";
         for (int j = 0; j < num_nvlinks_per_node * 2; j++) {
