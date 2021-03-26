@@ -25,7 +25,7 @@ public:
     int device_id;
 };
 
-class Comp_device : public Device
+class CompDevice : public Device
 {
 public:
     enum CompDevType {
@@ -33,10 +33,10 @@ public:
         TOC_PROC,   //GPU
     };
     CompDevType comp_type;
-    Comp_device(std::string name, CompDevType comp_type, int node_id, int socket_id, int device_id);
+    CompDevice(std::string name, CompDevType comp_type, int node_id, int socket_id, int device_id);
 };
 
-class Mem_device : public Device
+class MemDevice : public Device
 {
 public:
     enum MemDevType {
@@ -51,10 +51,10 @@ public:
         GPU_FB_MEM,     // GPU framebuffer memory for a single GPU
     };
     MemDevType mem_type;
-    Mem_device(std::string name, MemDevType mem_type, int node_id, int socket_id, int device_id);
+    MemDevice(std::string name, MemDevType mem_type, int node_id, int socket_id, int device_id);
 };
 
-class Comm_device : public Device
+class CommDevice : public Device
 {
 public:
     enum CommDevType {
@@ -63,25 +63,96 @@ public:
         UPI_OUT_COMM,
         NIC_IN_COMM,
         NIC_OUT_COMM,
-        //TODO:change PCI_IN to PCI_TO_MEM, PCI_OUT to PCI_TO_DEV
-        PCI_IN_COMM,
-        PCI_OUT_COMM,
+        PCI_TO_HOST_COMM,
+        PCI_TO_DEV_COMM,
         NVLINK_COMM,
     };
     CommDevType comm_type;
     float latency;
     float bandwidth;
-    Comm_device(std::string name, CommDevType comm_type, int node_id, int socket_id, int device_id, float latency, float bandwidth);
+    CommDevice(std::string name, CommDevType comm_type, int node_id, int socket_id, int device_id, float latency, float bandwidth);
 };
 
-class Machine
-{
+class MachineModel {
 public:
-    virtual std::vector<Comm_device *> get_comm_path(Mem_device *src_mem, Mem_device *tar_mem) { return {}; }
+  virtual ~MachineModel() = default;
+  virtual int get_version() const = 0;
+  virtual CompDevice *get_gpu(int device_id) const = 0;
+  virtual MemDevice *get_gpu_fb_mem(int devicd_id) const = 0;
+  virtual int get_num_gpus() const = 0;
+  virtual float get_intra_node_gpu_bandwidth() const = 0;
+  virtual float get_inter_node_gpu_bandwidth() const = 0;
+  virtual std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem) const = 0;
+  virtual std::string to_string() const = 0;
+  int version;
 };
 
-class Machine_Sherlock : public Machine
-{
+class SimpleMachineModel : public MachineModel {
+public:
+  SimpleMachineModel(int num_nodes, int num_cpus_per_node, int num_gpus_per_node);
+  ~SimpleMachineModel();
+  int get_version() const;
+  CompDevice *get_gpu(int device_id) const;
+  MemDevice *get_gpu_fb_mem(int devicd_id) const;
+  int get_num_gpus() const;
+  float get_intra_node_gpu_bandwidth() const;
+  float get_inter_node_gpu_bandwidth() const;
+  std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem) const;
+  std::string to_string() const;
+private:
+  int num_nodes;
+  int num_cpus_per_node;
+  int num_gpus_per_node;
+  int num_gpus;
+  float inter_gpu_bandwidth;
+  float inter_node_bandwidth;
+  float gpu_dram_bandwidth;
+  std::map<int, CompDevice*> id_to_cpu;
+  std::map<int, MemDevice*> id_to_sys_mem;
+  std::map<int, CompDevice*> id_to_gpu;
+  std::map<int, MemDevice*> id_to_gpu_fb_mem;
+  std::map<int, CommDevice*> id_to_gputodram_comm_device;
+  std::map<int, CommDevice*> id_to_dramtogpu_comm_device;
+  std::map<size_t, CommDevice*> ids_to_inter_gpu_comm_device;
+  std::map<size_t, CommDevice*> ids_to_inter_node_comm_device;
+};
+
+/**
+ * An enhanced machine model supports the following features:
+ * 1. Customize the machine model with a configuration file.
+ * 2. Support socket-level simulation.
+ * 3. Simulate congestions on a communication device. In this machine model, some communication 
+ *    devices, such as NIC_IN and NIC_OUT, represent the communication ports instead of the links 
+ *    in the simple machine model. In this way, for example, concurrent inter-node communications 
+ *    from node A to node B and from node A to node C share the same NIC_OUT device on node A, 
+ *    which simulates the slowdown of concurrent communications when transferring big messages.
+ * 4. When passing big messages, the messages usually are divided into segments and transferred 
+ *    one-by-one to overlap the communications on different devices. This machine model can 
+ *    simulate this kind of pipelining.
+ */ 
+class EnhancedMachineModel : public MachineModel {
+public:
+    enum NicDistribution {
+      PER_NODE,
+      PER_SOCKET,
+    };
+    EnhancedMachineModel(std::string file);
+    ~EnhancedMachineModel();
+    int get_version() const;
+    CompDevice *get_cpu(int device_id) const;
+    CompDevice *get_cpu(int socket_id, int local_id) const;
+    CompDevice *get_gpu(int device_id) const;
+    CompDevice *get_gpu(int socket_id, int local_id) const;
+    MemDevice *get_sys_mem(int socket_id) const;
+    MemDevice *get_z_copy_mem(int socket_id) const;
+    MemDevice *get_gpu_fb_mem(int device_id) const;
+    MemDevice *get_gpu_fb_mem(int socket_id, int local_id) const;
+    CommDevice *get_nvlink(MemDevice *src_mem, MemDevice *tar_mem) const;
+    int get_num_gpus() const;
+    float get_intra_node_gpu_bandwidth() const;
+    float get_inter_node_gpu_bandwidth() const;
+    std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem) const;
+    std::string to_string() const;
 private:
     int num_nodes;
     int num_sockets_per_node;
@@ -91,69 +162,58 @@ private:
     int num_cpus;
     int num_gpus;
     int num_nvlinks_per_node;
-    std::vector<std::vector<Comp_device *>> cpus;   // socket_id, local_id
-    std::vector<std::vector<Comp_device *>> gpus;   // socket_id, local_id
-    std::vector<Mem_device *> sys_mems;             // socket_id
-    std::vector<Mem_device *> z_copy_mems;          // socket_id
-    std::vector<std::vector<Mem_device *>> gpu_fb_mems;     // socket_id, local_id
-    std::vector<Comm_device *> membuses;            // socket_id
-    std::vector<Comm_device *> upi_ins;             // socket_id
-    std::vector<Comm_device *> upi_outs;            // socket_id
-    std::vector<Comm_device *> nic_ins;             // socket_id
-    std::vector<Comm_device *> nic_outs;            // socket_id
-    std::vector<Comm_device *> pcis_to_host;             // from gpu to main memory, socket_id
-    std::vector<Comm_device *> pcis_to_device;            // from main memory to gpu, socket_id
-    std::vector<std::vector<Comm_device *>> nvlinks;    // node_id, local_id
-    std::unordered_map<std::pair<int, int>, Comm_device *, boost::hash<std::pair<int, int>>> mem_to_nvlink;
+    float membus_latency;
+    float membus_bandwidth;
+    float upi_latency;
+    float upi_bandwidth;
+    float nic_latency;
+    float nic_bandwidth;
+    NicDistribution nic_distribution;
+    float pci_latency;
+    float pci_bandwidth;
+    float nvlink_latency;
+    float nvlink_bandwidth;
+    std::vector<CommDevice::CommDevType> intra_socket_sys_mem_to_sys_mem;
+    std::vector<CommDevice::CommDevType> inter_socket_sys_mem_to_sys_mem;
+    std::vector<CommDevice::CommDevType> inter_node_sys_mem_to_sys_mem;
+    std::vector<CommDevice::CommDevType> intra_socket_sys_mem_to_gpu_fb_mem;
+    std::vector<CommDevice::CommDevType> inter_socket_sys_mem_to_gpu_fb_mem;
+    std::vector<CommDevice::CommDevType> inter_node_sys_mem_to_gpu_fb_mem;
+    std::vector<CommDevice::CommDevType> intra_socket_gpu_fb_mem_to_sys_mem;
+    std::vector<CommDevice::CommDevType> inter_socket_gpu_fb_mem_to_sys_mem;
+    std::vector<CommDevice::CommDevType> inter_node_gpu_fb_mem_to_sys_mem;
+    std::vector<CommDevice::CommDevType> intra_socket_gpu_fb_mem_to_gpu_fb_mem;
+    std::vector<CommDevice::CommDevType> inter_socket_gpu_fb_mem_to_gpu_fb_mem;
+    std::vector<CommDevice::CommDevType> inter_node_gpu_fb_mem_to_gpu_fb_mem;
+    std::vector<std::vector<CompDevice *> > cpus;   // socket_id, local_id
+    std::vector<std::vector<CompDevice *> > gpus;   // socket_id, local_id
+    std::vector<MemDevice *> sys_mems;             // socket_id
+    std::vector<MemDevice *> z_copy_mems;          // socket_id
+    std::vector<std::vector<MemDevice *> > gpu_fb_mems;     // socket_id, local_id
+    std::vector<CommDevice *> membuses;            // socket_id
+    std::vector<CommDevice *> upi_ins;             // socket_id
+    std::vector<CommDevice *> upi_outs;            // socket_id
+    std::vector<CommDevice *> nic_ins;             // socket_id
+    std::vector<CommDevice *> nic_outs;            // socket_id
+    std::vector<CommDevice *> pcis_to_host;             // from gpu to main memory, socket_id
+    std::vector<CommDevice *> pcis_to_device;            // from main memory to gpu, socket_id
+    std::vector<std::vector<CommDevice *> > nvlinks;    // node_id, local_id
+    std::unordered_map<size_t, CommDevice *> mem_to_nvlink;
+    // set up communication paths from a config file
+    void set_comm_path(std::vector<CommDevice::CommDevType> &comm_path, std::string device_str);
     void add_cpus();
     void add_gpus();
-
-public:
-    Machine_Sherlock(int num_nodes, int num_sockets_per_node, int num_cpus_per_socket, int num_gpus_per_socket);
-    Comp_device *get_cpu(int device_id);
-    Comp_device *get_cpu(int socket_id, int local_id);
-    Comp_device *get_gpu(int device_id);
-    Comp_device *get_gpu(int socket_id, int local_id);
-    Mem_device *get_sys_mem(int socket_id);
-    Mem_device *get_z_copy_mem(int socket_id);
-    Mem_device *get_gpu_fb_mem(int device_id);
-    Mem_device *get_gpu_fb_mem(int socket_id, int local_id);
     void add_membuses(float latency, float bandwidth);
     void add_upis(float latency, float bandwidth);
-    void add_nics(float latency, float bandwidth);
+    void add_nics(float latency, float bandwidth, NicDistribution nic_distribution);
     void add_pcis(float latency, float bandwidth);
-    void add_nvlinks(int num_nvlinks_per_node, float latency, float bandwidth);
-    void attach_nvlink(Mem_device *src_mem, Mem_device *tar_mem, Comm_device *comm);    // nvlinks between GPUs
-    std::vector<Comm_device *> get_comm_path(Mem_device *src_mem, Mem_device *tar_mem);
-    std::string to_string();
+    void add_nvlinks(float latency, float bandwidth);
+    // attach a nvlink communication device to a pair of GPU framebuffer memories
+    void attach_nvlink(MemDevice *src_mem, MemDevice *tar_mem, CommDevice *comm);
+    // return a list of specific communication devices based on the descriptions of a communication path
+    void add_comm_path(std::vector<CommDevice::CommDevType> const &comm_device_list, MemDevice *src_mem, MemDevice *tar_mem, std::vector<CommDevice *> &ret) const;
 };
 
-class Machine_Old : public Machine
-{
-private:
-    int num_nodes;
-    int num_cpus_per_node;
-    int num_gpus_per_node;
-    int total_num_cpus;
-    int total_num_gpus;
-public:
-    std::unordered_map<int, Comp_device *> id_to_cpu;
-    std::unordered_map<int, Mem_device *> id_to_sys_mem;
-    std::unordered_map<int, Comp_device *> id_to_gpu;
-    std::unordered_map<int, Mem_device *> id_to_gpu_fb_mem;
-    std::unordered_map<int, Comm_device *> ids_to_inter_gpu_comm_device;
-    std::unordered_map<int, Comm_device *> id_to_gputodram_comm_device;
-    std::unordered_map<int, Comm_device *> id_to_dramtogpu_comm_device;
-    std::unordered_map<int, Comm_device *> ids_to_inter_node_comm_device;
-
-    Machine_Old(int num_nodes, int num_cpus_per_node, int num_gpus_per_node);
-    Comp_device *get_cpu(int device_id);
-    Comp_device *get_gpu(int device_id);
-    Mem_device *get_sys_mem(int socket_id);
-    Mem_device *get_gpu_fb_mem(int device_id);
-
-    std::vector<Comm_device *> get_comm_path(Mem_device *src_mem, Mem_device *tar_mem);
-};
 
 class Task
 {
@@ -169,20 +229,20 @@ public:
     virtual std::string to_string();
 };
 
-class Comp_task : public Task
+class CompTask : public Task
 {
 public:
-    Comp_task(std::string name, Comp_device *comp_deivce, float run_time, Mem_device *mem_device);
-    Mem_device *mem;
+    CompTask(std::string name, CompDevice *comp_deivce, float run_time, MemDevice *mem_device);
+    MemDevice *mem;
     float run_time;
     float cost();
     std::string to_string();
 };
 
-class Comm_task : public Task
+class CommTask : public Task
 {
 public:
-    Comm_task(std::string name, Comm_device *comm_device, int message_size);
+    CommTask(std::string name, CommDevice *comm_device, int message_size);
     int message_size;
     float cost();
     std::string to_string();
@@ -191,9 +251,11 @@ public:
 class TaskCompare {
 public:
     bool operator() (Task *lhs, Task *rhs) {
+        /*
         if (lhs->ready_time == rhs->ready_time) {
             return rand() % 2;
         }
+        */
         return lhs->ready_time > rhs->ready_time;
     }
 };
@@ -203,10 +265,10 @@ class Simulator
 private:
     std::priority_queue<Task *, std::vector<Task *>, TaskCompare> ready_queue;
 public:
-    Machine *machine;
-    Simulator(Machine *machine);
-    Task *new_comp_task(std::string name, Comp_device *comp_device, float run_time, Mem_device *mem_device);
-    void new_comm_task(Task *src_task, Task *tar_task, int message_size);
+    MachineModel *machine;
+    Simulator(MachineModel *machine);
+    Task *new_comp_task(std::string name, CompDevice *comp_device, float run_time, MemDevice *mem_device);
+    void new_comm_task(Task *src_task, Task *tar_task, long message_size);
     void enter_ready_queue(Task *task);
     void add_dependency(std::vector<Task *> prev_tasks, Task *cur_task);
     void add_dependency(Task *prev_task, Task *cur_task);

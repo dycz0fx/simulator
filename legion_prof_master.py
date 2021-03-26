@@ -19,7 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tempfile
-import legion_spy_cr
+import legion_spy_master
 import argparse
 import sys
 import os
@@ -32,7 +32,7 @@ import json
 import heapq
 import time
 import itertools
-from legion_serializer_cr import LegionProfASCIIDeserializer, LegionProfBinaryDeserializer, GetFileTypeInfo
+from legion_serializer_master import LegionProfASCIIDeserializer, LegionProfBinaryDeserializer, GetFileTypeInfo
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -1465,7 +1465,6 @@ class Task(Operation, TimeRange, HasDependencies, HasWaiters):
         self.initiation = ''
         self.is_task = True
         output.write(self.get_info()[1:-1] + ' ' + str(self.total_time()) + '\n')
-        #output_temp.write(self.get_info()[1:-1] + ' ' + str(self.total_time()) + ' ' + str(self.start) + ' ' + str(self.stop) + '\n')
 
     def assign_color(self, color):
         assert self.color is None
@@ -2527,7 +2526,7 @@ class State(object):
             "CopyInstInfo": self.log_copy_inst_info
             #"UserInfo": self.log_user_info
         }
-        
+
     def log_max_dim(self, max_dim):
         self.max_dim = max_dim
 
@@ -2652,7 +2651,7 @@ class State(object):
         cpy = self.find_copy(fevent)
         entry = self.create_copy_inst_info(src_inst, dst_inst, fevent, num_fields, request_type, num_hops)
         cpy.add_copy_info(entry)
- 
+
     def log_fill_info(self, op_id, dst, create, ready, start, stop):
         op = self.find_op(op_id)
         dst = self.find_memory(dst)
@@ -3920,8 +3919,11 @@ class State(object):
 def main():
     global output
     output = open("cost","w+")
-    global output_temp
-    output_temp = open("temp","w+")
+
+    global global_start
+    global_start = []
+    global global_stop
+    global_stop = []
 
     class MyParser(argparse.ArgumentParser):
         def error(self, message):
@@ -4039,7 +4041,6 @@ def main():
             state.show_copy_matrix(copy_output_prefix)
 
     output.close()
-    output_temp.close()
 
 if __name__ == '__main__':
     start = time.time()
