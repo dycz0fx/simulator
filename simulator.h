@@ -6,9 +6,6 @@
 #include <time.h>
 #include <boost/functional/hash.hpp>
 
-#define SEG_SIZE 16777216
-#define MAX_NUM_SEGS 10
-#define LEGION_OVERHEAD 0
 class Device
 {
 public:
@@ -77,6 +74,8 @@ class MachineModel {
 public:
   virtual ~MachineModel() = default;
   virtual int get_version() const = 0;
+  virtual CompDevice *get_cpu(int device_id) const = 0;
+  virtual MemDevice *get_sys_mem(int devicd_id) const = 0;
   virtual CompDevice *get_gpu(int device_id) const = 0;
   virtual MemDevice *get_gpu_fb_mem(int devicd_id) const = 0;
   virtual int get_num_gpus() const = 0;
@@ -85,6 +84,9 @@ public:
   virtual std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem) const = 0;
   virtual std::string to_string() const = 0;
   int version;
+  size_t default_seg_size;
+  int max_num_segs;
+  float realm_comm_overhead;
 };
 
 class SimpleMachineModel : public MachineModel {
@@ -92,6 +94,8 @@ public:
   SimpleMachineModel(int num_nodes, int num_cpus_per_node, int num_gpus_per_node);
   ~SimpleMachineModel();
   int get_version() const;
+  CompDevice *get_cpu(int device_id) const;
+  MemDevice *get_sys_mem(int socket_id) const;
   CompDevice *get_gpu(int device_id) const;
   MemDevice *get_gpu_fb_mem(int devicd_id) const;
   int get_num_gpus() const;
@@ -226,7 +230,8 @@ public:
     int counter;
     bool is_main;       // whether is a part of main loop
     void add_next_task(Task *task);
-    virtual std::string to_string();
+    virtual float cost() const = 0 ;
+    virtual std::string to_string() const = 0;
 };
 
 class CompTask : public Task
@@ -235,17 +240,17 @@ public:
     CompTask(std::string name, CompDevice *comp_deivce, float run_time, MemDevice *mem_device);
     MemDevice *mem;
     float run_time;
-    float cost();
-    std::string to_string();
+    float cost() const;
+    std::string to_string() const;
 };
 
 class CommTask : public Task
 {
 public:
-    CommTask(std::string name, CommDevice *comm_device, int message_size);
-    int message_size;
-    float cost();
-    std::string to_string();
+    CommTask(std::string name, CommDevice *comm_device, size_t message_size);
+    size_t message_size;
+    float cost() const;
+    std::string to_string() const;
 };
 
 class TaskCompare {
@@ -268,7 +273,7 @@ public:
     MachineModel *machine;
     Simulator(MachineModel *machine);
     Task *new_comp_task(std::string name, CompDevice *comp_device, float run_time, MemDevice *mem_device);
-    void new_comm_task(Task *src_task, Task *tar_task, long message_size);
+    void new_comm_task(Task *src_task, Task *tar_task, size_t message_size);
     void enter_ready_queue(Task *task);
     void add_dependency(std::vector<Task *> prev_tasks, Task *cur_task);
     void add_dependency(Task *prev_task, Task *cur_task);

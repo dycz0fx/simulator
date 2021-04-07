@@ -4,6 +4,9 @@
 SimpleMachineModel::SimpleMachineModel(int num_nodes, int num_cpus_per_node, int num_gpus_per_node)
 {
   version = 0;
+  default_seg_size = 4194304 * 4;
+  max_num_segs = 1;
+  realm_comm_overhead = 0;
   this->num_nodes = num_nodes;
   this->num_cpus_per_node = num_cpus_per_node;
   this->num_gpus_per_node = num_gpus_per_node;
@@ -76,6 +79,18 @@ SimpleMachineModel::~SimpleMachineModel()
 int SimpleMachineModel::get_version() const
 {
   return version;
+}
+
+CompDevice *SimpleMachineModel::get_cpu(int device_id) const
+{
+  assert(id_to_cpu.find(device_id) != id_to_cpu.end());
+  return id_to_cpu.at(device_id);
+}
+
+MemDevice *SimpleMachineModel::get_sys_mem(int device_id) const
+{
+  assert(id_to_sys_mem.find(device_id) != id_to_sys_mem.end());
+  return id_to_sys_mem.at(device_id);
 }
 
 CompDevice *SimpleMachineModel::get_gpu(int device_id) const
@@ -703,7 +718,9 @@ void EnhancedMachineModel::add_comm_path(std::vector<CommDevice::CommDevType> co
       ret.emplace_back(pcis_to_device[cur_mem->socket_id]);
       break;
     case CommDevice::NVLINK_COMM:
-      ret.emplace_back(get_nvlink(src_mem, tar_mem));
+      if (src_mem->device_id != tar_mem->device_id) {
+        ret.emplace_back(get_nvlink(src_mem, tar_mem));
+      }
       break;
     default:
       break;

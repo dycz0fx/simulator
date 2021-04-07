@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-# Copyright 2020 Stanford University, NVIDIA Corporation
+# Copyright 2021 Stanford University, NVIDIA Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tempfile
-import legion_spy
+import legion_spy_ff
 import argparse
 import sys
 import os
@@ -32,7 +32,8 @@ import json
 import heapq
 import time
 import itertools
-from legion_serializer import LegionProfASCIIDeserializer, LegionProfBinaryDeserializer, GetFileTypeInfo
+from functools import reduce
+from legion_serializer_ff import LegionProfASCIIDeserializer, LegionProfBinaryDeserializer, GetFileTypeInfo
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -154,6 +155,11 @@ legion_dimension_kind_t = {
     27 : 'OUTER_DIM_R',
 }
 
+request = {
+    0 : 'fill',
+    1 : 'reduc',
+    2 : 'copy',
+}
 
 # Micro-seconds per pixel
 US_PER_PIXEL = 100
@@ -248,6 +254,25 @@ def iterkeys(obj):
 
 def itervalues(obj):
     return obj.values() if sys.version_info > (3,) else obj.viewvalues()
+
+# Helper function for size
+def size_pretty(size):
+    if size is not None:
+        if size >= (1024*1024*1024):
+            # GBs
+            size_pretty = '%.3f GiB' % (size / (1024.0*1024.0*1024.0))
+        elif size >= (1024*1024):
+            # MBs
+            size_pretty = '%.3f MiB' % (size / (1024.0*1024.0))
+        elif size >= 1024:
+            # KBs
+            size_pretty = '%.3f KiB' % (size / 1024.0)
+        else:
+            # Bytes
+            size_pretty = str(size) + ' B'
+    else:
+        size_pretty = 'Unknown'
+    return size_pretty
 
 class PathRange(object):
     __slots__ = ['start', 'stop', 'path']
@@ -677,8 +702,6 @@ class Processor(object):
         total = 0
         for task in self.tasks:
             total += task.total_time()
-            if isinstance(task, Task):
-                print(task.get_info() + ' ' + str(task.start) + ',' + str(task.stop))
         return total
 
     def active_time(self):
@@ -1064,6 +1087,8 @@ class Channel(object):
             print()
         
     def __repr__(self):
+        if self.src is None and self.dst is None:
+            return 'Dependent Partition Channel'
         if self.src is None:
             return 'Fill ' + self.dst.__repr__() + ' Channel'
         else:
@@ -1199,6 +1224,9 @@ class Variant(StatObject):
         self.task_kind = None
         self.color = None
 
+    def __hash__(self):
+        return hash(str(self))
+
     def __eq__(self, other):
         return self.variant_id == other.variant_id
 
@@ -1220,7 +1248,10 @@ class Variant(StatObject):
             if self.name != None and self.name != self.task_kind.name:
                 title += ' ['+self.name+']'
         else:
-            title = self.name
+            if self.name != None:
+                title = self.name
+            else:
+                title = ""
         return title
 
 class Base(object):
@@ -1453,9 +1484,6 @@ class Task(Operation, TimeRange, HasDependencies, HasWaiters):
         self.variant = variant
         self.initiation = ''
         self.is_task = True
-        global_start.append(start)
-        global_stop.append(stop)
-        #print(self.get_info() + " ready:" + str(ready/1000) + " start:" + str(start/1000) + " stop:" + str(stop/1000) + "ms")
         output.write(self.get_info()[1:-1] + ' ' + str(self.total_time()) + '\n')
 
     def assign_color(self, color):
@@ -1640,9 +1668,27 @@ class UserMarker(Base, TimeRange, HasNoDependencies):
     def __repr__(self):
         return 'User Marker "'+self.name+'"'
 
+class CopyInfo(object):
+    __slots__ = [
+        'src_inst', 'dst_inst', 'fevent', 'num_fields', 'request_type', 'num_hops'
+        ]
+    def __init__(self, src_inst, dst_inst, fevent, num_fields, request_type, num_hops):
+        self.src_inst = src_inst
+        self.dst_inst = dst_inst
+        self.fevent = fevent
+        self.num_fields = num_fields
+        self.request_type = request_type
+        self.num_hops = num_hops
+
+    def get_short_text(self):
+        return 'src_inst=%s, dst_inst=%s, fields=%s, type=%s, hops=%s' % (hex(self.src_inst), hex(self.dst_inst), self.num_fields, request[self.request_type], self.num_hops)
+
+    def __repr__(self):
+        return self.get_short_text()
+
 class Copy(Base, TimeRange, HasInitiationDependencies):
-    __slots__ = TimeRange._abstract_slots + HasInitiationDependencies._abstract_slots + ['src', 'dst', 'size', 'chan']
-    def __init__(self, src, dst, initiation_op, size, create, ready, start, stop):
+    __slots__ = TimeRange._abstract_slots + HasInitiationDependencies._abstract_slots + ['src', 'dst', 'size', 'chan', 'fevent', 'src_inst', 'dst_inst', 'num_requests', 'copy_info']
+    def __init__(self, src, dst, initiation_op, size, create, ready, start, stop, fevent, num_requests):
         Base.__init__(self)
         HasInitiationDependencies.__init__(self, initiation_op)
         TimeRange.__init__(self, create, ready, start, stop)
@@ -1650,6 +1696,13 @@ class Copy(Base, TimeRange, HasInitiationDependencies):
         self.dst = dst
         self.size = size
         self.chan = None
+        self.fevent = fevent
+        self.num_requests = num_requests
+        self.copy_info = list()
+        output_copy.write(str(self.size) + " " + hex(self.src.mem_id) + " " + hex(self.dst.mem_id) + "\n")
+
+    def add_copy_info(self, entry):
+        self.copy_info.append(entry)
 
     def get_owner(self):
         return self.chan
@@ -1659,7 +1712,12 @@ class Copy(Base, TimeRange, HasInitiationDependencies):
         return self.initiation_op.get_color()
 
     def __repr__(self):
-        return 'Copy size='+str(self.size)
+        val =  'size='+ size_pretty(self.size) + ', num reqs=' + str(len(self.copy_info))
+        cnt = 0
+        for node in self.copy_info:
+            val = val + '$req[' + str(cnt) + ']: ' +  node.get_short_text()
+            cnt = cnt+1
+        return val
 
     def get_unique_tuple(self):
         assert self.chan is not None
@@ -1847,21 +1905,7 @@ class Instance(Base, TimeRange, HasInitiationDependencies):
 
     def __repr__(self):
         # Check to see if we got a profiling callback
-        if self.size is not None:
-            if self.size >= (1024*1024*1024):
-                # GBs
-                size_pretty = '%.3f GiB' % (self.size / (1024.0*1024.0*1024.0))
-            elif self.size >= (1024*1024):
-                # MBs
-                size_pretty = '%.3f MiB' % (self.size / (1024.0*1024.0))
-            elif self.size >= 1024:
-                # KBs
-                size_pretty = '%.3f KiB' % (self.size / 1024.0)
-            else:
-                # Bytes
-                size_pretty = str(self.size) + ' B'
-        else:
-            size_pretty = 'Unknown'
+        size_pr = size_pretty(self.size)
         output_str = ""
         for pos in range(0, len(self.ispace)):
             output_str = output_str + "Region: " + self.ispace[pos].get_short_text()
@@ -1942,8 +1986,8 @@ class Instance(Base, TimeRange, HasInitiationDependencies):
                     output_str = output_str + "["
                     output_str = output_str + legion_dimension_kind_t[self.dim_order_desc[pos]]
                     output_str = output_str +  "]"
-                    if (pos+1)%4 == 0 and pos != dim_order:
-                        output_str = output_str+ "$"
+                    if (pos+1)%4 == 0 and pos != len(self.dim_order_desc)-1:
+                        output_str = output_str + "$"
             else:
                 if aos == True:
                     output_str = output_str + "[Array-of-structs (AOS)]"
@@ -1952,7 +1996,7 @@ class Instance(Base, TimeRange, HasInitiationDependencies):
                         output_str = output_str + "[Struct-of-arrays (SOA)]"
 
         output_str = output_str + " $Inst: {} $Size: {}"
-        return output_str.format(str(hex(self.inst_id)),size_pretty)
+        return output_str.format(str(hex(self.inst_id)),size_pr)
 
 
 class MapperCallKind(StatObject):
@@ -1962,6 +2006,9 @@ class MapperCallKind(StatObject):
         self.mapper_call_kind = mapper_call_kind
         self.name = name
         self.color = None
+
+    def __hash__(self):
+        return hash(self.mapper_call_kind)
 
     def __eq__(self, other):
         return self.mapper_call_kind == other.mapper_call_kind
@@ -2410,7 +2457,7 @@ class State(object):
         'prof_uid_map', 'multi_tasks', 'first_times', 'last_times',
         'last_time', 'mapper_call_kinds', 'mapper_calls', 'runtime_call_kinds', 
         'runtime_calls', 'instances', 'index_spaces', 'partitions', 'logical_regions', 
-        'field_spaces', 'fields', 'has_spy_data', 'spy_state', 'callbacks'
+        'field_spaces', 'fields', 'has_spy_data', 'spy_state', 'callbacks', 'copy_map'
     ]
     def __init__(self):
         self.max_dim = 3
@@ -2438,6 +2485,7 @@ class State(object):
         self.logical_regions = {}
         self.field_spaces = {}
         self.fields = {}
+        self.copy_map = {}
         self.has_spy_data = False
         self.spy_state = None
         self.callbacks = {
@@ -2481,10 +2529,11 @@ class State(object):
             "PhysicalInstLayoutDesc": self.log_physical_inst_layout_desc,
             "PhysicalInstDimOrderDesc": self.log_physical_inst_layout_dim_desc,
             "IndexSpaceSizeDesc": self.log_index_space_size_desc,
-            "MaxDimDesc": self.log_max_dim
+            "MaxDimDesc": self.log_max_dim,
+            "CopyInstInfo": self.log_copy_inst_info
             #"UserInfo": self.log_user_info
         }
-
+        
     def log_max_dim(self, max_dim):
         self.max_dim = max_dim
 
@@ -2500,7 +2549,6 @@ class State(object):
     def log_index_space_desc(self, unique_id, name):
         index_space = self.find_index_space(unique_id)
         index_space.set_name(name)
-        repr(index_space)
 
     def log_logical_region_desc(self, ispace_id, fspace_id, tree_id, name):
         logical_region = self.create_logical_region(ispace_id, fspace_id, tree_id, name)
@@ -2589,16 +2637,27 @@ class State(object):
         proc = self.find_processor(proc_id)
         proc.add_task(meta)
 
+    def add_copy_map(self,fevent,copy):
+        key = fevent
+        if key not in self.copy_map:
+            self.copy_map[key] = copy
+
     def log_copy_info(self, op_id, src, dst, size,
-                      create, ready, start, stop):
+                      create, ready, start, stop, fevent, num_requests):
         op = self.find_op(op_id)
         src = self.find_memory(src)
         dst = self.find_memory(dst)
-        copy = self.create_copy(src, dst, op, size, create, ready, start, stop)
+        copy = self.create_copy(src, dst, op, size, create, ready, start, stop, fevent, num_requests)
+        self.add_copy_map(fevent,copy)
         if stop > self.last_time:
             self.last_time = stop
         channel = self.find_channel(src, dst)
         channel.add_copy(copy)
+
+    def log_copy_inst_info(self, op_id, src_inst, dst_inst, fevent, num_fields, request_type, num_hops):
+        cpy = self.find_copy(fevent)
+        entry = self.create_copy_inst_info(src_inst, dst_inst, fevent, num_fields, request_type, num_hops)
+        cpy.add_copy_info(entry)
  
     def log_fill_info(self, op_id, dst, create, ready, start, stop):
         op = self.find_op(op_id)
@@ -2825,6 +2884,12 @@ class State(object):
             self.prof_uid_map[op.prof_uid] = op
         return self.operations[op_id]
 
+    def find_copy(self,fevent):
+        key = fevent
+        if key not in self.copy_map:
+            assert False
+        return self.copy_map[key]
+
     def find_task(self, op_id, variant, create=None, ready=None, start=None, stop=None):
         task = self.find_op(op_id)
         # Upgrade this operation to a task if necessary
@@ -2958,11 +3023,15 @@ class State(object):
         self.prof_uid_map[meta.prof_uid] = meta
         return meta
 
-    def create_copy(self, src, dst, op, size, create, ready, start, stop):
-        copy = Copy(src, dst, op, size, create, ready, start, stop)
+    def create_copy(self, src, dst,  op, size, create, ready, start, stop, fevent, num_requests):
+        copy = Copy(src, dst, op, size, create, ready, start, stop, fevent, num_requests)
         # update prof_uid map
         self.prof_uid_map[copy.prof_uid] = copy
         return copy
+
+    def create_copy_inst_info(self, src_inst, dst_inst, fevent, num_fields, request_type, num_hops):
+        copyinfo =  CopyInfo(src_inst, dst_inst, fevent, num_fields, request_type, num_hops)
+        return copyinfo
 
     def create_fill(self, dst, op, create, ready, start, stop):
         fill = Fill(dst, op, create, ready, start, stop)
@@ -2987,6 +3056,12 @@ class State(object):
         else:
             inst = self.instances[key]
         return inst
+
+    def find_instance(self, inst_id, op_id):
+        key = (inst_id, op_id)
+        if key not in self.instances:
+            return None
+        return self.instances[key]
 
     def create_user_marker(self, name):
         user = UserMarker(name)
@@ -3062,9 +3137,9 @@ class State(object):
 
     def print_stats(self, verbose):
         self.print_processor_stats(verbose)
-        #self.print_memory_stats(verbose)
-        #self.print_channel_stats(verbose)
-        #self.print_task_stats(verbose) #could be useful
+        self.print_memory_stats(verbose)
+        self.print_channel_stats(verbose)
+        self.print_task_stats(verbose)
 
     def assign_colors(self):
         # Subtract out some colors for which we have special colors
@@ -3421,7 +3496,7 @@ class State(object):
     # Here, we read the legion spy data! We will use this to draw dependency
     # lines in the prof
     def get_op_dependencies(self, file_names):
-        self.spy_state = legion_spy.State(None, False, True, True, True, False)
+        self.spy_state = legion_spy.State(None, False, True, True, True, False, False)
 
         total_matches = 0
 
@@ -3497,7 +3572,7 @@ class State(object):
         self.spy_state.post_parse(False, True)
 
         print("Performing physical analysis...")
-        self.spy_state.perform_physical_analysis(False, False)
+        self.spy_state.perform_physical_analysis(False)
         self.spy_state.simplify_physical_graph(need_cycle_check=False)
 
         op = self.spy_state.get_operation(self.spy_state.top_level_uid)
@@ -3566,6 +3641,7 @@ class State(object):
 
         # now apply the existence map
         op_dependencies, transitive_map = self.simplify_op_dependencies(op_dependencies, op_existence_set)
+
         return op_dependencies, transitive_map
 
     def convert_op_ids_to_tuples(self, op_dependencies):
@@ -3644,7 +3720,7 @@ class State(object):
         all_children = []
         for op in critical_path.path:
             # remove initiation depedencies from the inner critical paths
-            longest_child_path = filter(lambda p: not isinstance(p, HasInitiationDependencies), self.get_longest_child(op))
+            longest_child_path = list(filter(lambda p: not isinstance(p, HasInitiationDependencies), self.get_longest_child(op)))
             all_children = all_children + longest_child_path
         critical_path.path = critical_path.path + all_children
 
@@ -3810,7 +3886,7 @@ class State(object):
 
         critical_path_json_file_name = os.path.join(json_dir, "critical_path.json")
         with open(critical_path_json_file_name, "w") as critical_path_json_file:
-            json.dump(critical_path, critical_path_json_file)
+            json.dump(list(critical_path), critical_path_json_file)
 
         processor_tsv_file = open(processor_tsv_file_name, "w")
         processor_tsv_file.write("full_text\ttext\ttsv\tlevels\n")
@@ -3850,12 +3926,9 @@ class State(object):
 def main():
     global output
     output = open("cost","w+")
+    global output_copy
+    output_copy = open("copy","w+")
 
-    global global_start
-    global_start = []
-    global global_stop
-    global_stop = []
-    
     class MyParser(argparse.ArgumentParser):
         def error(self, message):
             self.print_usage(sys.stderr)
@@ -3970,9 +4043,9 @@ def main():
                              file_names, show_channels, show_instances, force)
         if show_copy_matrix:
             state.show_copy_matrix(copy_output_prefix)
-    
+
     output.close()
-    print(str((max(global_stop) - min(global_start))/ 1000) + "ms")
+    output_copy.close()
 
 if __name__ == '__main__':
     start = time.time()

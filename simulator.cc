@@ -36,21 +36,16 @@ CommDevice::CommDevice(std::string name, CommDevType comm_type, int node_id, int
 }
 
 // class Task
-Task::Task(string name, Device *device) 
+Task::Task(string name, Device *device)
 : name(name), device(device), ready_time(0.0f), counter(0), is_main(false)
 {
     next_tasks.clear();
-} 
+}
 
 void Task::add_next_task(Task *task)
 {
     next_tasks.push_back(task);
     task->counter++;
-}
-
-string Task::to_string()
-{
-    return name + " on " + device->name;
 }
 
 // class CompTask
@@ -59,28 +54,28 @@ CompTask::CompTask(std::string name, CompDevice *comp_deivce, float run_time, Me
 {
 }
 
-string CompTask::to_string()
+string CompTask::to_string() const
 {
     return name + "(" + device->name + ',' + std::to_string(counter) + ',' + std::to_string(run_time) + "ms," + mem->name + ")";
 }
 
-float CompTask::cost()
+float CompTask::cost() const
 {
     return run_time;
 }
 
 // class CommTask
-CommTask::CommTask(string name, CommDevice *comm_device, int message_size)
+CommTask::CommTask(string name, CommDevice *comm_device, size_t message_size)
 : Task(name, comm_device), message_size(message_size)
 {
 }
 
-string CommTask::to_string()
+string CommTask::to_string() const
 {
     return name + "(" + device->name + ',' + std::to_string(counter) + ',' + std::to_string(message_size) + "B)";
 }
 
-float CommTask::cost()
+float CommTask::cost() const
 {
     CommDevice *comm = (CommDevice *) device;
     return comm->latency + message_size / comm->bandwidth;
@@ -97,31 +92,35 @@ Task *Simulator::new_comp_task(string name, CompDevice *comp_device, float run_t
     return cur_task;
 }
 
-void Simulator::new_comm_task(Task *src_task, Task *tar_task, long message_size)
+void Simulator::new_comm_task(Task *src_task, Task *tar_task, size_t message_size)
 {
     vector<CommDevice *> path = machine->get_comm_path(((CompTask *)src_task)->mem, ((CompTask *)tar_task)->mem);
-    if (path.empty()) {
+    if (path.empty() or message_size == 0) {
         add_dependency(src_task, tar_task);
         return;
     }
     assert(message_size > 0);
     vector<vector<Task *> > all_tasks;
     // Limit the max number of segments per message
-    int seg_size = SEG_SIZE;
+    size_t seg_size = machine->default_seg_size;
     int num_segment = message_size / seg_size;
     if (message_size % seg_size != 0) {
         num_segment += 1;
     }
-    if (num_segment > MAX_NUM_SEGS) {
-        num_segment = MAX_NUM_SEGS;
+    if (num_segment > machine->max_num_segs) {
+        num_segment = machine->max_num_segs;
         seg_size = message_size / num_segment;
+    }
+    if (path.size() == 1) {
+        num_segment = 1;
+        seg_size = message_size;
     }
     // Create all the comm tasks
     // Divide messages into segments
     for (int i = 0; i < path.size(); i++) {
         all_tasks.push_back({});
         for (int j = 0; j < num_segment; j++) {
-            int cur_seg_size = seg_size;
+            size_t cur_seg_size = seg_size;
             if (j == num_segment - 1) {
                 cur_seg_size = message_size - (num_segment - 1) * seg_size;
             }
@@ -198,9 +197,6 @@ void Simulator::simulate()
             ready_time = device_times[(Device *)cur_task->device];
         }
         float start_time = max(ready_time, cur_task->ready_time);
-        if (cur_task->device->type == Device::DEVICE_COMP) {
-            start_time += LEGION_OVERHEAD;
-        }
         float run_time = 0;
         if (cur_task->device->type == Device::DEVICE_COMP) {
             run_time = ((CompTask *)cur_task)->cost();
@@ -218,6 +214,7 @@ void Simulator::simulate()
             main_loop_stop = fmaxf(main_loop_stop, end_time);
         }
         //if (cur_task->device->name == "GPU 4")
+        // if (run_time < 0)
         cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "task_ready(" << cur_task->ready_time << ") device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
         if (end_time > sim_time)
             sim_time = end_time;
