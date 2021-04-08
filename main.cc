@@ -151,6 +151,7 @@ void stencil_1d_gpu()
 
 }
 
+vector<string> utils_ids;
 std::unordered_map<std::string, pair<int, int>> cpu_id_map;
 std::unordered_map<std::string, pair<int, int>> gpu_id_map;
 std::unordered_map<std::string, int> mem_id_map;
@@ -213,7 +214,15 @@ static void init_id_maps()
     // mem_id_map["0x1e00010000000004"] = {7};
 
     /* for circuit, stencil, pennant */
+    utils_ids.push_back("0x1d00000000000000");
+    utils_ids.push_back("0x1d00000000000001");
+    utils_ids.push_back("0x1d00000000000002");
+    utils_ids.push_back("0x1d00000000000003");
     // set up cpu_id_map: device_id
+    cpu_id_map["0x1d00000000000000"] = {0, 0};
+    cpu_id_map["0x1d00000000000001"] = {0, 1};
+    cpu_id_map["0x1d00000000000002"] = {0, 2};
+    cpu_id_map["0x1d00000000000003"] = {0, 3};
     cpu_id_map["0x1d00000000000004"] = {0, 4};
     cpu_id_map["0x1d00000000000005"] = {0, 5};
     cpu_id_map["0x1d00000000000006"] = {0, 6};
@@ -231,6 +240,10 @@ static void init_id_maps()
     cpu_id_map["0x1d00000000000012"] = {0, 18};
     cpu_id_map["0x1d00000000000013"] = {0, 19};
 
+    cpu_id_map["0x1d00010000000000"] = {1, 20};
+    cpu_id_map["0x1d00010000000001"] = {1, 21};
+    cpu_id_map["0x1d00010000000002"] = {1, 22};
+    cpu_id_map["0x1d00010000000003"] = {1, 23};
     cpu_id_map["0x1d00010000000004"] = {1, 24};
     cpu_id_map["0x1d00010000000005"] = {1, 25};
     cpu_id_map["0x1d00010000000006"] = {1, 26};
@@ -248,6 +261,10 @@ static void init_id_maps()
     cpu_id_map["0x1d00010000000012"] = {1, 38};
     cpu_id_map["0x1d00010000000013"] = {1, 39};
 
+    cpu_id_map["0x1d00020000000000"] = {2, 40};
+    cpu_id_map["0x1d00020000000001"] = {2, 41};
+    cpu_id_map["0x1d00020000000002"] = {2, 42};
+    cpu_id_map["0x1d00020000000003"] = {2, 43};
     cpu_id_map["0x1d00020000000004"] = {2, 44};
     cpu_id_map["0x1d00020000000005"] = {2, 45};
     cpu_id_map["0x1d00020000000006"] = {2, 46};
@@ -265,6 +282,10 @@ static void init_id_maps()
     cpu_id_map["0x1d00020000000012"] = {2, 58};
     cpu_id_map["0x1d00020000000013"] = {2, 59};
 
+    cpu_id_map["0x1d00030000000000"] = {3, 60};
+    cpu_id_map["0x1d00030000000001"] = {3, 61};
+    cpu_id_map["0x1d00030000000002"] = {3, 62};
+    cpu_id_map["0x1d00030000000003"] = {3, 63};
     cpu_id_map["0x1d00030000000004"] = {3, 64};
     cpu_id_map["0x1d00030000000005"] = {3, 65};
     cpu_id_map["0x1d00030000000006"] = {3, 66};
@@ -474,12 +495,14 @@ void run_dag_file(int argc, char **argv)
                         src_mem_device_type = line_array[line_array.size()-6];
 
                     }
-                    // cout << comp_device_type << "-" << comp_device_id << " " << src_mem_device_type << "-" << src_mem_device_id << " " << tar_mem_device_type << "-" << tar_mem_device_id << endl;
+                    // cout << task_name << " " << comp_device_type << "-" << comp_device_id << " " << src_mem_device_type << "-" << src_mem_device_id << " " << tar_mem_device_type << "-" << tar_mem_device_id << endl;
                     Task *cur_task;
                     CompDevice *comp_device;
                     MemDevice *mem_device;
+                    int random_util_id = rand() % utils_ids.size();
                     if (comp_device_type == "CPU") {
-                        pair<int, int> ids = cpu_id_map[comp_device_id];
+                        // pair<int, int> ids = cpu_id_map[comp_device_id];
+                        pair<int, int> ids = cpu_id_map[utils_ids[random_util_id]];
                         comp_device = machine->get_cpu(ids.second);
                     }
                     else if (comp_device_type == "GPU") {
@@ -506,7 +529,7 @@ void run_dag_file(int argc, char **argv)
                     // cout << cur_task->to_string() << endl;
                     comp_tasks_map[task_name] = cur_task;
                     long index_size = 0, field_size = 0;
-                    string task_uid;
+                    string task_uid = "";
                     for (int i = 0; i < line_array.size(); i++) {
                         if (line_array[i] == "Index_Space_Size:") {
                             index_size = stol(line_array[i+1]);
@@ -515,9 +538,10 @@ void run_dag_file(int argc, char **argv)
                             field_size = stol(line_array[i+1]);
                             break;
                         }
-                        if (line_array[i] == "UID:") {
+                        // Realm Fill do not have "UID:" in comm
+                        if (line_array[i] == "(UID:") {
                             task_uid = line_array[i+1];
-                            task_uid = task_uid.substr(0, task_uid.size()-1);
+                            task_uid = task_uid.substr(0, task_uid.size()-3);
                         }
                     }
                     assert(index_size > 0 and field_size > 0);
@@ -525,7 +549,9 @@ void run_dag_file(int argc, char **argv)
                     // cout << task_name << " - " << index_size * field_size << " bytes" << endl;
                     
                     // change op_node tasks' memory based on the tar_mem_device_id
+                    // TODO: do not change op_node tasks' memory, use the target memory in the comm directly
                     string tar_task_name = "op_node_" + task_uid;
+                    // cout << tar_task_name << endl;
                     if (comp_tasks_map.find(tar_task_name) != comp_tasks_map.end()) {
                         CompTask *tar_comp_task = (CompTask *)comp_tasks_map.at(tar_task_name);
                         MemDevice *tar_mem_device;
@@ -542,6 +568,7 @@ void run_dag_file(int argc, char **argv)
                             assert(0);
                         }
                         tar_comp_task->mem = tar_mem_device;
+                        // cout << tar_comp_task->to_string() << endl;
                     }
 
                 }
@@ -576,7 +603,7 @@ void run_dag_file(int argc, char **argv)
                     comp_tasks_map.find(line_array[3]) != comp_tasks_map.end()) {
                     long message_size = 0;
                     if (starts_with(line_array[1], "realm")) {
-                        message_size = messages_map[line_array[3]];
+                        message_size = messages_map[line_array[1]];
                     }
                     else if (starts_with(line_array[3], "realm")) {
                         message_size = 0;
