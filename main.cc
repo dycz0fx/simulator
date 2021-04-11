@@ -151,7 +151,7 @@ void stencil_1d_gpu()
 
 }
 
-vector<string> utils_ids;
+vector<vector<string>> utils_ids;
 std::unordered_map<std::string, pair<int, int>> cpu_id_map;
 std::unordered_map<std::string, pair<int, int>> gpu_id_map;
 std::unordered_map<std::string, int> mem_id_map;
@@ -160,35 +160,66 @@ std::unordered_map<std::string, int> mem_id_map;
 static void init_id_maps()
 {
     /* for alexnet, resnet, inception */
-    // // set up cpu_id_map: device_id
-    // cpu_id_map["0x1d00000000000002"] = {0, 0};
-    // cpu_id_map["0x1d00010000000002"] = {1, 20};
-    // // set up mem_id_map for system mem and zero copy mem : socket_id
-    // mem_id_map["0x1e00000000000000"] = {0};
-    // mem_id_map["0x1e00000000000005"] = {0};
-    // mem_id_map["0x1e00010000000000"] = {1};
-    // mem_id_map["0x1e00010000000005"] = {1};
-    // // set up gpu_id_map: device_id
-    // gpu_id_map["0x1d00000000000003"] = {0, 0};
-    // gpu_id_map["0x1d00000000000004"] = {0, 1};
-    // gpu_id_map["0x1d00000000000005"] = {0, 2};
-    // gpu_id_map["0x1d00000000000006"] = {0, 3};
-    // gpu_id_map["0x1d00010000000003"] = {1, 4};
-    // gpu_id_map["0x1d00010000000004"] = {1, 5};
-    // gpu_id_map["0x1d00010000000005"] = {1, 6};
-    // gpu_id_map["0x1d00010000000006"] = {1, 7};
-    // mem_id_map["0x1e00000000000001"] = {0};
-    // mem_id_map["0x1e00000000000002"] = {1};
-    // mem_id_map["0x1e00000000000003"] = {2};
-    // mem_id_map["0x1e00000000000004"] = {3};
-    // mem_id_map["0x1e00010000000001"] = {4};
-    // mem_id_map["0x1e00010000000002"] = {5};
-    // mem_id_map["0x1e00010000000003"] = {6};
-    // mem_id_map["0x1e00010000000004"] = {7};
+    utils_ids.push_back({});
+    utils_ids.back().push_back("0x1d00000000000000");
+    utils_ids.back().push_back("0x1d00000000000001");
+    utils_ids.push_back({});
+    utils_ids.back().push_back("0x1d00010000000000");
+    utils_ids.back().push_back("0x1d00010000000001");
+
+    // set up cpu_id_map: device_id
+    cpu_id_map["0x1d00000000000000"] = {0, 0};
+    cpu_id_map["0x1d00000000000001"] = {0, 1};
+    cpu_id_map["0x1d00000000000002"] = {0, 2};
+
+    cpu_id_map["0x1d00010000000000"] = {1, 20};
+    cpu_id_map["0x1d00010000000001"] = {1, 21};
+    cpu_id_map["0x1d00010000000002"] = {1, 22};
+
+    // set up mem_id_map for system mem and zero copy mem : socket_id
+    mem_id_map["0x1e00000000000000"] = {0};
+    mem_id_map["0x1e00000000000005"] = {0};
+    mem_id_map["0x1e00010000000000"] = {1};
+    mem_id_map["0x1e00010000000005"] = {1};
+    // set up gpu_id_map: device_id
+    gpu_id_map["0x1d00000000000003"] = {0, 0};
+    gpu_id_map["0x1d00000000000004"] = {0, 1};
+    gpu_id_map["0x1d00000000000005"] = {0, 2};
+    gpu_id_map["0x1d00000000000006"] = {0, 3};
+    gpu_id_map["0x1d00010000000003"] = {1, 4};
+    gpu_id_map["0x1d00010000000004"] = {1, 5};
+    gpu_id_map["0x1d00010000000005"] = {1, 6};
+    gpu_id_map["0x1d00010000000006"] = {1, 7};
+    mem_id_map["0x1e00000000000001"] = {0};
+    mem_id_map["0x1e00000000000002"] = {1};
+    mem_id_map["0x1e00000000000003"] = {2};
+    mem_id_map["0x1e00000000000004"] = {3};
+    mem_id_map["0x1e00010000000001"] = {4};
+    mem_id_map["0x1e00010000000002"] = {5};
+    mem_id_map["0x1e00010000000003"] = {6};
+    mem_id_map["0x1e00010000000004"] = {7};
 
     /* for dlrm only */
+    // utils_ids.push_back({});
+    // utils_ids.back().push_back("0x1d00000000000000");
+    // utils_ids.back().push_back("0x1d00000000000001");
+    // utils_ids.back().push_back("0x1d00000000000002");
+    // utils_ids.back().push_back("0x1d00000000000003");
+    // utils_ids.push_back({});
+    // utils_ids.back().push_back("0x1d00010000000000");
+    // utils_ids.back().push_back("0x1d00010000000001");
+    // utils_ids.back().push_back("0x1d00010000000002");
+    // utils_ids.back().push_back("0x1d00010000000003");
     // // set up cpu_id_map: device_id
+    // cpu_id_map["0x1d00000000000000"] = {0, 0};
+    // cpu_id_map["0x1d00000000000001"] = {0, 1};
+    // cpu_id_map["0x1d00000000000002"] = {0, 2};
+    // cpu_id_map["0x1d00000000000003"] = {0, 3};
     // cpu_id_map["0x1d00000000000004"] = {0, 4};
+    // cpu_id_map["0x1d00010000000000"] = {1, 20};
+    // cpu_id_map["0x1d00010000000001"] = {1, 21};
+    // cpu_id_map["0x1d00010000000002"] = {1, 22};
+    // cpu_id_map["0x1d00010000000003"] = {1, 23};
     // cpu_id_map["0x1d00010000000004"] = {1, 24};
     // // set up mem_id_map for system mem and zero copy mem : socket_id
     // mem_id_map["0x1e00000000000000"] = {0};
@@ -214,100 +245,117 @@ static void init_id_maps()
     // mem_id_map["0x1e00010000000004"] = {7};
 
     /* for circuit, stencil, pennant */
-    utils_ids.push_back("0x1d00000000000000");
-    utils_ids.push_back("0x1d00000000000001");
-    utils_ids.push_back("0x1d00000000000002");
-    utils_ids.push_back("0x1d00000000000003");
-    // set up cpu_id_map: device_id
-    cpu_id_map["0x1d00000000000000"] = {0, 0};
-    cpu_id_map["0x1d00000000000001"] = {0, 1};
-    cpu_id_map["0x1d00000000000002"] = {0, 2};
-    cpu_id_map["0x1d00000000000003"] = {0, 3};
-    cpu_id_map["0x1d00000000000004"] = {0, 4};
-    cpu_id_map["0x1d00000000000005"] = {0, 5};
-    cpu_id_map["0x1d00000000000006"] = {0, 6};
-    cpu_id_map["0x1d00000000000007"] = {0, 7};
-    cpu_id_map["0x1d00000000000008"] = {0, 8};
-    cpu_id_map["0x1d00000000000009"] = {0, 9};
-    cpu_id_map["0x1d0000000000000a"] = {0, 10};
-    cpu_id_map["0x1d0000000000000b"] = {0, 11};
-    cpu_id_map["0x1d0000000000000c"] = {0, 12};
-    cpu_id_map["0x1d0000000000000d"] = {0, 13};
-    cpu_id_map["0x1d0000000000000e"] = {0, 14};
-    cpu_id_map["0x1d0000000000000f"] = {0, 15};
-    cpu_id_map["0x1d00000000000010"] = {0, 16};
-    cpu_id_map["0x1d00000000000011"] = {0, 17};
-    cpu_id_map["0x1d00000000000012"] = {0, 18};
-    cpu_id_map["0x1d00000000000013"] = {0, 19};
+    // // set up util cores: socket_id, device_id
+    // utils_ids.push_back({});
+    // utils_ids.back().push_back("0x1d00000000000000");
+    // utils_ids.back().push_back("0x1d00000000000001");
+    // utils_ids.back().push_back("0x1d00000000000002");
+    // utils_ids.back().push_back("0x1d00000000000003");
+    // utils_ids.push_back({});
+    // utils_ids.back().push_back("0x1d00010000000000");
+    // utils_ids.back().push_back("0x1d00010000000001");
+    // utils_ids.back().push_back("0x1d00010000000002");
+    // utils_ids.back().push_back("0x1d00010000000003");
+    // utils_ids.push_back({});
+    // utils_ids.back().push_back("0x1d00020000000000");
+    // utils_ids.back().push_back("0x1d00020000000001");
+    // utils_ids.back().push_back("0x1d00020000000002");
+    // utils_ids.back().push_back("0x1d00020000000003");
+    // utils_ids.push_back({});
+    // utils_ids.back().push_back("0x1d00030000000000");
+    // utils_ids.back().push_back("0x1d00030000000001");
+    // utils_ids.back().push_back("0x1d00030000000002");
+    // utils_ids.back().push_back("0x1d00030000000003");
+    // // set up cpu_id_map: device_id
+    // cpu_id_map["0x1d00000000000000"] = {0, 0};
+    // cpu_id_map["0x1d00000000000001"] = {0, 1};
+    // cpu_id_map["0x1d00000000000002"] = {0, 2};
+    // cpu_id_map["0x1d00000000000003"] = {0, 3};
+    // cpu_id_map["0x1d00000000000004"] = {0, 4};
+    // cpu_id_map["0x1d00000000000005"] = {0, 5};
+    // cpu_id_map["0x1d00000000000006"] = {0, 6};
+    // cpu_id_map["0x1d00000000000007"] = {0, 7};
+    // cpu_id_map["0x1d00000000000008"] = {0, 8};
+    // cpu_id_map["0x1d00000000000009"] = {0, 9};
+    // cpu_id_map["0x1d0000000000000a"] = {0, 10};
+    // cpu_id_map["0x1d0000000000000b"] = {0, 11};
+    // cpu_id_map["0x1d0000000000000c"] = {0, 12};
+    // cpu_id_map["0x1d0000000000000d"] = {0, 13};
+    // cpu_id_map["0x1d0000000000000e"] = {0, 14};
+    // cpu_id_map["0x1d0000000000000f"] = {0, 15};
+    // cpu_id_map["0x1d00000000000010"] = {0, 16};
+    // cpu_id_map["0x1d00000000000011"] = {0, 17};
+    // cpu_id_map["0x1d00000000000012"] = {0, 18};
+    // cpu_id_map["0x1d00000000000013"] = {0, 19};
 
-    cpu_id_map["0x1d00010000000000"] = {1, 20};
-    cpu_id_map["0x1d00010000000001"] = {1, 21};
-    cpu_id_map["0x1d00010000000002"] = {1, 22};
-    cpu_id_map["0x1d00010000000003"] = {1, 23};
-    cpu_id_map["0x1d00010000000004"] = {1, 24};
-    cpu_id_map["0x1d00010000000005"] = {1, 25};
-    cpu_id_map["0x1d00010000000006"] = {1, 26};
-    cpu_id_map["0x1d00010000000007"] = {1, 27};
-    cpu_id_map["0x1d00010000000008"] = {1, 28};
-    cpu_id_map["0x1d00010000000009"] = {1, 29};
-    cpu_id_map["0x1d0001000000000a"] = {1, 30};
-    cpu_id_map["0x1d0001000000000b"] = {1, 31};
-    cpu_id_map["0x1d0001000000000c"] = {1, 32};
-    cpu_id_map["0x1d0001000000000d"] = {1, 33};
-    cpu_id_map["0x1d0001000000000e"] = {1, 34};
-    cpu_id_map["0x1d0001000000000f"] = {1, 35};
-    cpu_id_map["0x1d00010000000010"] = {1, 36};
-    cpu_id_map["0x1d00010000000011"] = {1, 37};
-    cpu_id_map["0x1d00010000000012"] = {1, 38};
-    cpu_id_map["0x1d00010000000013"] = {1, 39};
+    // cpu_id_map["0x1d00010000000000"] = {1, 20};
+    // cpu_id_map["0x1d00010000000001"] = {1, 21};
+    // cpu_id_map["0x1d00010000000002"] = {1, 22};
+    // cpu_id_map["0x1d00010000000003"] = {1, 23};
+    // cpu_id_map["0x1d00010000000004"] = {1, 24};
+    // cpu_id_map["0x1d00010000000005"] = {1, 25};
+    // cpu_id_map["0x1d00010000000006"] = {1, 26};
+    // cpu_id_map["0x1d00010000000007"] = {1, 27};
+    // cpu_id_map["0x1d00010000000008"] = {1, 28};
+    // cpu_id_map["0x1d00010000000009"] = {1, 29};
+    // cpu_id_map["0x1d0001000000000a"] = {1, 30};
+    // cpu_id_map["0x1d0001000000000b"] = {1, 31};
+    // cpu_id_map["0x1d0001000000000c"] = {1, 32};
+    // cpu_id_map["0x1d0001000000000d"] = {1, 33};
+    // cpu_id_map["0x1d0001000000000e"] = {1, 34};
+    // cpu_id_map["0x1d0001000000000f"] = {1, 35};
+    // cpu_id_map["0x1d00010000000010"] = {1, 36};
+    // cpu_id_map["0x1d00010000000011"] = {1, 37};
+    // cpu_id_map["0x1d00010000000012"] = {1, 38};
+    // cpu_id_map["0x1d00010000000013"] = {1, 39};
 
-    cpu_id_map["0x1d00020000000000"] = {2, 40};
-    cpu_id_map["0x1d00020000000001"] = {2, 41};
-    cpu_id_map["0x1d00020000000002"] = {2, 42};
-    cpu_id_map["0x1d00020000000003"] = {2, 43};
-    cpu_id_map["0x1d00020000000004"] = {2, 44};
-    cpu_id_map["0x1d00020000000005"] = {2, 45};
-    cpu_id_map["0x1d00020000000006"] = {2, 46};
-    cpu_id_map["0x1d00020000000007"] = {2, 47};
-    cpu_id_map["0x1d00020000000008"] = {2, 48};
-    cpu_id_map["0x1d00020000000009"] = {2, 49};
-    cpu_id_map["0x1d0002000000000a"] = {2, 50};
-    cpu_id_map["0x1d0002000000000b"] = {2, 51};
-    cpu_id_map["0x1d0002000000000c"] = {2, 52};
-    cpu_id_map["0x1d0002000000000d"] = {2, 53};
-    cpu_id_map["0x1d0002000000000e"] = {2, 54};
-    cpu_id_map["0x1d0002000000000f"] = {2, 55};
-    cpu_id_map["0x1d00020000000010"] = {2, 56};
-    cpu_id_map["0x1d00020000000011"] = {2, 57};
-    cpu_id_map["0x1d00020000000012"] = {2, 58};
-    cpu_id_map["0x1d00020000000013"] = {2, 59};
+    // cpu_id_map["0x1d00020000000000"] = {2, 40};
+    // cpu_id_map["0x1d00020000000001"] = {2, 41};
+    // cpu_id_map["0x1d00020000000002"] = {2, 42};
+    // cpu_id_map["0x1d00020000000003"] = {2, 43};
+    // cpu_id_map["0x1d00020000000004"] = {2, 44};
+    // cpu_id_map["0x1d00020000000005"] = {2, 45};
+    // cpu_id_map["0x1d00020000000006"] = {2, 46};
+    // cpu_id_map["0x1d00020000000007"] = {2, 47};
+    // cpu_id_map["0x1d00020000000008"] = {2, 48};
+    // cpu_id_map["0x1d00020000000009"] = {2, 49};
+    // cpu_id_map["0x1d0002000000000a"] = {2, 50};
+    // cpu_id_map["0x1d0002000000000b"] = {2, 51};
+    // cpu_id_map["0x1d0002000000000c"] = {2, 52};
+    // cpu_id_map["0x1d0002000000000d"] = {2, 53};
+    // cpu_id_map["0x1d0002000000000e"] = {2, 54};
+    // cpu_id_map["0x1d0002000000000f"] = {2, 55};
+    // cpu_id_map["0x1d00020000000010"] = {2, 56};
+    // cpu_id_map["0x1d00020000000011"] = {2, 57};
+    // cpu_id_map["0x1d00020000000012"] = {2, 58};
+    // cpu_id_map["0x1d00020000000013"] = {2, 59};
 
-    cpu_id_map["0x1d00030000000000"] = {3, 60};
-    cpu_id_map["0x1d00030000000001"] = {3, 61};
-    cpu_id_map["0x1d00030000000002"] = {3, 62};
-    cpu_id_map["0x1d00030000000003"] = {3, 63};
-    cpu_id_map["0x1d00030000000004"] = {3, 64};
-    cpu_id_map["0x1d00030000000005"] = {3, 65};
-    cpu_id_map["0x1d00030000000006"] = {3, 66};
-    cpu_id_map["0x1d00030000000007"] = {3, 67};
-    cpu_id_map["0x1d00030000000008"] = {3, 68};
-    cpu_id_map["0x1d00030000000009"] = {3, 69};
-    cpu_id_map["0x1d0003000000000a"] = {3, 70};
-    cpu_id_map["0x1d0003000000000b"] = {3, 71};
-    cpu_id_map["0x1d0003000000000c"] = {3, 72};
-    cpu_id_map["0x1d0003000000000d"] = {3, 73};
-    cpu_id_map["0x1d0003000000000e"] = {3, 74};
-    cpu_id_map["0x1d0003000000000f"] = {3, 75};
-    cpu_id_map["0x1d00030000000010"] = {3, 76};
-    cpu_id_map["0x1d00030000000011"] = {3, 77};
-    cpu_id_map["0x1d00030000000012"] = {3, 78};
-    cpu_id_map["0x1d00030000000013"] = {3, 79};
+    // cpu_id_map["0x1d00030000000000"] = {3, 60};
+    // cpu_id_map["0x1d00030000000001"] = {3, 61};
+    // cpu_id_map["0x1d00030000000002"] = {3, 62};
+    // cpu_id_map["0x1d00030000000003"] = {3, 63};
+    // cpu_id_map["0x1d00030000000004"] = {3, 64};
+    // cpu_id_map["0x1d00030000000005"] = {3, 65};
+    // cpu_id_map["0x1d00030000000006"] = {3, 66};
+    // cpu_id_map["0x1d00030000000007"] = {3, 67};
+    // cpu_id_map["0x1d00030000000008"] = {3, 68};
+    // cpu_id_map["0x1d00030000000009"] = {3, 69};
+    // cpu_id_map["0x1d0003000000000a"] = {3, 70};
+    // cpu_id_map["0x1d0003000000000b"] = {3, 71};
+    // cpu_id_map["0x1d0003000000000c"] = {3, 72};
+    // cpu_id_map["0x1d0003000000000d"] = {3, 73};
+    // cpu_id_map["0x1d0003000000000e"] = {3, 74};
+    // cpu_id_map["0x1d0003000000000f"] = {3, 75};
+    // cpu_id_map["0x1d00030000000010"] = {3, 76};
+    // cpu_id_map["0x1d00030000000011"] = {3, 77};
+    // cpu_id_map["0x1d00030000000012"] = {3, 78};
+    // cpu_id_map["0x1d00030000000013"] = {3, 79};
 
-    // set up mem_id_map for system mem and zero copy mem : socket_id
-    mem_id_map["0x1e00000000000000"] = {0};
-    mem_id_map["0x1e00010000000000"] = {1};
-    mem_id_map["0x1e00020000000000"] = {2};
-    mem_id_map["0x1e00030000000000"] = {3};
+    // // set up mem_id_map for system mem : socket_id
+    // mem_id_map["0x1e00000000000000"] = {0};
+    // mem_id_map["0x1e00010000000000"] = {1};
+    // mem_id_map["0x1e00020000000000"] = {2};
+    // mem_id_map["0x1e00030000000000"] = {3};
 
 }
 // create machine model (sherlock)
@@ -324,7 +372,7 @@ EnhancedMachineModel *create_enhanced_machine_model()
 
 SimpleMachineModel *create_simple_machine_model()
 {
-    SimpleMachineModel *machine = new SimpleMachineModel(2, 20, 4);
+    SimpleMachineModel *machine = new SimpleMachineModel(4, 20, 4);
     std::cout << machine->to_string() << std::endl;
     init_id_maps();
     return machine;
@@ -499,11 +547,12 @@ void run_dag_file(int argc, char **argv)
                     Task *cur_task;
                     CompDevice *comp_device;
                     MemDevice *mem_device;
-                    int random_util_id = rand() % utils_ids.size();
+                    int random_util_id = rand() % utils_ids[0].size();
                     if (comp_device_type == "CPU") {
-                        // pair<int, int> ids = cpu_id_map[comp_device_id];
-                        pair<int, int> ids = cpu_id_map[utils_ids[random_util_id]];
-                        comp_device = machine->get_cpu(ids.second);
+                        pair<int, int> ids = cpu_id_map[comp_device_id];
+                        // comp_device = machine->get_cpu(ids.second);
+                        pair<int, int> temp_ids = cpu_id_map[utils_ids[ids.first][random_util_id]];
+                        comp_device = machine->get_cpu(temp_ids.second);
                     }
                     else if (comp_device_type == "GPU") {
                         pair<int, int> ids = gpu_id_map[comp_device_id];

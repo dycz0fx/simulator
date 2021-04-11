@@ -215,7 +215,7 @@ void Simulator::simulate()
         }
         //if (cur_task->device->name == "GPU 4")
         // if (run_time < 0)
-        cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "task_ready(" << cur_task->ready_time << ") device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
+        // cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "task_ready(" << cur_task->ready_time << ") device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
         if (end_time > sim_time)
             sim_time = end_time;
         for (size_t i = 0; i < cur_task->next_tasks.size(); i++) {
