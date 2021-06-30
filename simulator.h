@@ -223,12 +223,14 @@ class Task
 {
 public:
     Task(std::string name, Device *device);
+    size_t id;
+    static size_t cur_id;
     std::string name;
     Device *device;
     float ready_time;
     std::vector<Task *> next_tasks;
     int counter;
-    bool is_main;       // whether is a part of main loop
+    bool is_main;   // whether is a part of main loop
     void add_next_task(Task *task);
     virtual float cost() const = 0 ;
     virtual std::string to_string() const = 0;
@@ -256,11 +258,9 @@ public:
 class TaskCompare {
 public:
     bool operator() (Task *lhs, Task *rhs) {
-        /*
         if (lhs->ready_time == rhs->ready_time) {
-            return rand() % 2;
+            return lhs->id > rhs->id;
         }
-        */
         return lhs->ready_time > rhs->ready_time;
     }
 };

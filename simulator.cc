@@ -36,10 +36,13 @@ CommDevice::CommDevice(std::string name, CommDevType comm_type, int node_id, int
 }
 
 // class Task
+size_t Task::cur_id{0};
+
 Task::Task(string name, Device *device)
 : name(name), device(device), ready_time(0.0f), counter(0), is_main(false)
 {
     next_tasks.clear();
+    id = cur_id++;
 }
 
 void Task::add_next_task(Task *task)
@@ -149,10 +152,10 @@ void Simulator::new_comm_task(Task *src_task, Task *tar_task, size_t message_siz
     // overlap between upi_ins and upi_outs, and between nic_ins and nic_outs.
     if (num_segment > 1 and path.size() >= 2) {
         for (int i = 0; i < path.size(); i++) {
-            for (int j = 1; j < num_segment; j++) {
-                if (((CommDevice *)all_tasks[i][j]->device)->comm_type == CommDevice::NIC_OUT_COMM or
-                    ((CommDevice *)all_tasks[i][j]->device)->comm_type == CommDevice::UPI_OUT_COMM) {
-                    add_dependency(all_tasks[i+1][j-1], all_tasks[i][j]);
+            for (int j = 0; j < num_segment - 1; j++) {
+                if (((CommDevice *)all_tasks[i][j]->device)->comm_type == CommDevice::NIC_IN_COMM or
+                    ((CommDevice *)all_tasks[i][j]->device)->comm_type == CommDevice::UPI_IN_COMM) {
+                    add_dependency(all_tasks[i][j], all_tasks[i-1][j+1]);
                 }
             }
         }
@@ -215,7 +218,7 @@ void Simulator::simulate()
         }
         //if (cur_task->device->name == "GPU 4")
         // if (run_time < 0)
-        // cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "task_ready(" << cur_task->ready_time << ") device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
+        cout << cur_task->name << " --- " << cur_task->device->name << " --- " << "task_ready(" << cur_task->ready_time << ") device_ready(" << ready_time << ") start("  << start_time << ") run(" << run_time << ") end(" <<  end_time << ")" << endl;
         if (end_time > sim_time)
             sim_time = end_time;
         for (size_t i = 0; i < cur_task->next_tasks.size(); i++) {
