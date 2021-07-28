@@ -12,15 +12,40 @@ using std::max;
 using std::pair;
 
 // class Device
-Device::Device(string name, DeviceType type, int node_id, int socket_id, int device_id)
-: name(name), type(type), node_id(node_id), socket_id(socket_id), device_id(device_id)
+Device::Device(string name, DeviceType type, int node_id, int socket_id, int device_id, int max_sub_device = 1)
+: name(name), type(type), node_id(node_id), socket_id(socket_id), device_id(device_id), max_sub_device(max_sub_device)
+{
+    cur_sub_deivce = 0;
+    sub_devices.reserve(max_sub_device);
+    for (int i = 0; i < max_sub_device; i++) {
+        sub_devices.emplace_back(new SubDevice(this, i));
+    }
+}
+
+SubDevice *Device::get_avail_sub_device()
+{
+    if (max_sub_device == 1) {
+        return sub_devices[0];
+    }
+    else {
+        SubDevice *ret = sub_devices[cur_sub_deivce++];
+        if (cur_sub_deivce == max_sub_device) {
+            cur_sub_deivce = 0;
+        }
+        return ret;
+    }
+}
+
+// class SubDevice
+SubDevice::SubDevice(Device *main_device, int sub_device_id)
+: main_device(main_device), sub_device_id(sub_device_id)
 {
 }
 
 // class CompDevice
-CompDevice::CompDevice(std::string name, CompDevType comp_type, int node_id, int socket_id, int device_id)
-: Device(name, Device::DEVICE_COMP, node_id, socket_id, device_id), comp_type(comp_type)
-{
+CompDevice::CompDevice(std::string name, CompDevType comp_type, int node_id, int socket_id, int device_id, int max_sub_device)
+: Device(name, Device::DEVICE_COMP, node_id, socket_id, device_id, max_sub_device), comp_type(comp_type)
+{    
 }
 
 // class MemDevice
@@ -190,14 +215,15 @@ void Simulator::simulate()
     float comp_time = 0.0f;
     int comp_count = 0;
     float comm_time = 0.0f;
-    unordered_map<Device*, float> device_times;
+    unordered_map<SubDevice *, float> device_times;
     while (!ready_queue.empty()) {
         // Find the task with the earliest start time
         Task* cur_task = ready_queue.top();
         ready_queue.pop();
         float ready_time = 0;
-        if (device_times.find((Device *)cur_task->device) != device_times.end()) {
-            ready_time = device_times[(Device *)cur_task->device];
+        SubDevice *cur_sub_device = cur_task->device->get_avail_sub_device();
+        if (device_times.find(cur_sub_device) != device_times.end()) {
+            ready_time = device_times[cur_sub_device];
         }
         float start_time = max(ready_time, cur_task->ready_time);
         float run_time = 0;
@@ -211,7 +237,7 @@ void Simulator::simulate()
             comm_time += run_time;
         }
         float end_time = start_time + run_time;
-        device_times[cur_task->device] = end_time;
+        device_times[cur_sub_device] = end_time;
         if (measure_main_loop and cur_task->is_main) {
             main_loop_start = fminf(main_loop_start, start_time);
             main_loop_stop = fmaxf(main_loop_stop, end_time);

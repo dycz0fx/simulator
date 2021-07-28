@@ -392,13 +392,11 @@ static void init_id_maps()
     mem_id_map["0x1e00030000000002"] = {13};
     mem_id_map["0x1e00030000000003"] = {14};
     mem_id_map["0x1e00030000000004"] = {15};
-
-
 }
 // create machine model (sherlock)
 EnhancedMachineModel *create_enhanced_machine_model()
 {
-    EnhancedMachineModel *machine = new EnhancedMachineModel("/Users/xluo/Documents/simulator_experiments/machine_config_sapling");
+    EnhancedMachineModel *machine = new EnhancedMachineModel("/Users/xluo/Documents/simulator_experiments/machine_config_temp");
     machine->default_seg_size = 4194304;
     machine->max_num_segs = 10;
     machine->realm_comm_overhead = 0.1;
@@ -749,20 +747,26 @@ void test_comm()
         }
     }
 
-    Task *src = comp_tasks[0];
-    Task *tar = comp_tasks[20];
+    Task *src = comp_tasks[40];
+    Task *tar = comp_tasks[44];
     long message_size = 64 << 20;
     simulator.enter_ready_queue(src);
     simulator.new_comm_task(src, tar, message_size);
+    simulator.new_comm_task(src, tar, message_size);
+    simulator.new_comm_task(src, tar, message_size);
+    simulator.new_comm_task(src, tar, message_size);
+    simulator.new_comm_task(src, tar, message_size);
+    simulator.new_comm_task(src, tar, message_size);
+
     simulator.simulate();
 }
 
 int main(int argc, char **argv)
 {
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    run_dag_file(argc, argv);
+    // run_dag_file(argc, argv);
     // stencil_1d_cpu();
-    // test_comm();
+    test_comm();
     std::chrono::steady_clock::time_point stop = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
     cout << "simulator runs: " << time_span.count() << " seconds" <<  endl;

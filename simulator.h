@@ -6,6 +6,8 @@
 #include <time.h>
 #include <boost/functional/hash.hpp>
 
+class SubDevice;
+
 class Device
 {
 public:
@@ -14,12 +16,24 @@ public:
         DEVICE_MEM,
         DEVICE_COMM,
     };
-    Device(std::string name, DeviceType type, int node_id, int socket_id, int device_id);
+    Device(std::string name, DeviceType type, int node_id, int socket_id, int device_id, int max_sub_device);
     std::string name;
     DeviceType type;
     int node_id;
     int socket_id;
     int device_id;
+    int max_sub_device;
+    int cur_sub_deivce;
+    std::vector<SubDevice *> sub_devices;
+    SubDevice *get_avail_sub_device();
+};
+
+class SubDevice
+{
+public:
+    Device *main_device;
+    int sub_device_id;  //from 0 to max_sub_device - 1 for each device
+    SubDevice(Device *main_device, int sub_device_id);
 };
 
 class CompDevice : public Device
@@ -30,7 +44,7 @@ public:
         TOC_PROC,   //GPU
     };
     CompDevType comp_type;
-    CompDevice(std::string name, CompDevType comp_type, int node_id, int socket_id, int device_id);
+    CompDevice(std::string name, CompDevType comp_type, int node_id, int socket_id, int device_id, int max_sub_device);
 };
 
 class MemDevice : public Device
@@ -81,7 +95,7 @@ public:
   virtual int get_num_gpus() const = 0;
   virtual float get_intra_node_gpu_bandwidth() const = 0;
   virtual float get_inter_node_gpu_bandwidth() const = 0;
-  virtual std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem) const = 0;
+  virtual std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem) = 0;
   virtual std::string to_string() const = 0;
   int version;
   size_t default_seg_size;
@@ -101,7 +115,7 @@ public:
   int get_num_gpus() const;
   float get_intra_node_gpu_bandwidth() const;
   float get_inter_node_gpu_bandwidth() const;
-  std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem) const;
+  std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem);
   std::string to_string() const;
 private:
   int num_nodes;
@@ -136,10 +150,6 @@ private:
  */ 
 class EnhancedMachineModel : public MachineModel {
 public:
-    enum NicDistribution {
-      PER_NODE,
-      PER_SOCKET,
-    };
     EnhancedMachineModel(std::string file);
     ~EnhancedMachineModel();
     int get_version() const;
@@ -152,16 +162,19 @@ public:
     MemDevice *get_gpu_fb_mem(int device_id) const;
     MemDevice *get_gpu_fb_mem(int socket_id, int local_id) const;
     CommDevice *get_nvlink(MemDevice *src_mem, MemDevice *tar_mem) const;
+    CommDevice *get_next_nic_in(int socket_id);
+    CommDevice *get_next_nic_out(int socket_id) const;
     int get_num_gpus() const;
     float get_intra_node_gpu_bandwidth() const;
     float get_inter_node_gpu_bandwidth() const;
-    std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem) const;
+    std::vector<CommDevice *> get_comm_path(MemDevice *src_mem, MemDevice *tar_mem);
     std::string to_string() const;
 private:
     int num_nodes;
     int num_sockets_per_node;
     int num_cpus_per_socket;
     int num_gpus_per_socket;
+    int num_cudastream_per_gpu = 1;
     int num_sockets;
     int num_cpus;
     int num_gpus;
@@ -172,7 +185,8 @@ private:
     float upi_bandwidth;
     float nic_latency;
     float nic_bandwidth;
-    NicDistribution nic_distribution;
+    int nic_persocket;
+    int cur_nic_local_id;
     float pci_latency;
     float pci_bandwidth;
     float nvlink_latency;
@@ -197,8 +211,8 @@ private:
     std::vector<CommDevice *> membuses;            // socket_id
     std::vector<CommDevice *> upi_ins;             // socket_id
     std::vector<CommDevice *> upi_outs;            // socket_id
-    std::vector<CommDevice *> nic_ins;             // socket_id
-    std::vector<CommDevice *> nic_outs;            // socket_id
+    std::vector<std::vector<CommDevice *> > nic_ins;  // socket_id, local_id
+    std::vector<std::vector<CommDevice *> > nic_outs; // socket_id, local_id
     std::vector<CommDevice *> pcis_to_host;             // from gpu to main memory, socket_id
     std::vector<CommDevice *> pcis_to_device;            // from main memory to gpu, socket_id
     std::vector<std::vector<CommDevice *> > nvlinks;    // node_id, local_id
@@ -209,13 +223,13 @@ private:
     void add_gpus();
     void add_membuses(float latency, float bandwidth);
     void add_upis(float latency, float bandwidth);
-    void add_nics(float latency, float bandwidth, NicDistribution nic_distribution);
+    void add_nics(float latency, float bandwidth, int nic_persocket);
     void add_pcis(float latency, float bandwidth);
     void add_nvlinks(float latency, float bandwidth);
     // attach a nvlink communication device to a pair of GPU framebuffer memories
     void attach_nvlink(MemDevice *src_mem, MemDevice *tar_mem, CommDevice *comm);
     // return a list of specific communication devices based on the descriptions of a communication path
-    void add_comm_path(std::vector<CommDevice::CommDevType> const &comm_device_list, MemDevice *src_mem, MemDevice *tar_mem, std::vector<CommDevice *> &ret) const;
+    void add_comm_path(std::vector<CommDevice::CommDevType> const &comm_device_list, MemDevice *src_mem, MemDevice *tar_mem, std::vector<CommDevice *> &ret);
 };
 
 
