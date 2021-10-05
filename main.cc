@@ -12,6 +12,8 @@ using std::unordered_map;
 using std::unordered_set;
 using std::pair;
 
+int num_bgworks;
+
 vector<string> split(string srcStr, const string& delim)
 {
 	int nPos = 0;
@@ -151,7 +153,7 @@ void stencil_1d_gpu()
 
 }
 
-vector<vector<string>> utils_ids;
+vector<vector<string>> bgwork_ids;
 std::unordered_map<std::string, pair<int, int>> cpu_id_map;
 std::unordered_map<std::string, pair<int, int>> gpu_id_map;
 std::unordered_map<std::string, int> mem_id_map;
@@ -160,12 +162,12 @@ std::unordered_map<std::string, int> mem_id_map;
 static void init_id_maps()
 {
     /* for alexnet, resnet, inception */
-    // utils_ids.push_back({});
-    // utils_ids.back().push_back("0x1d00000000000000");
-    // utils_ids.back().push_back("0x1d00000000000001");
-    // utils_ids.push_back({});
-    // utils_ids.back().push_back("0x1d00010000000000");
-    // utils_ids.back().push_back("0x1d00010000000001");
+    // bgwork_ids.push_back({});
+    // bgwork_ids.back().push_back("0x1d00000000000000");
+    // bgwork_ids.back().push_back("0x1d00000000000001");
+    // bgwork_ids.push_back({});
+    // bgwork_ids.back().push_back("0x1d00010000000000");
+    // bgwork_ids.back().push_back("0x1d00010000000001");
 
     // // set up cpu_id_map: device_id
     // cpu_id_map["0x1d00000000000000"] = {0, 0};
@@ -200,16 +202,16 @@ static void init_id_maps()
     // mem_id_map["0x1e00010000000004"] = {7};
 
     /* for dlrm only */
-    // utils_ids.push_back({});
-    // utils_ids.back().push_back("0x1d00000000000000");
-    // utils_ids.back().push_back("0x1d00000000000001");
-    // utils_ids.back().push_back("0x1d00000000000002");
-    // utils_ids.back().push_back("0x1d00000000000003");
-    // utils_ids.push_back({});
-    // utils_ids.back().push_back("0x1d00010000000000");
-    // utils_ids.back().push_back("0x1d00010000000001");
-    // utils_ids.back().push_back("0x1d00010000000002");
-    // utils_ids.back().push_back("0x1d00010000000003");
+    // bgwork_ids.push_back({});
+    // bgwork_ids.back().push_back("0x1d00000000000000");
+    // bgwork_ids.back().push_back("0x1d00000000000001");
+    // bgwork_ids.back().push_back("0x1d00000000000002");
+    // bgwork_ids.back().push_back("0x1d00000000000003");
+    // bgwork_ids.push_back({});
+    // bgwork_ids.back().push_back("0x1d00010000000000");
+    // bgwork_ids.back().push_back("0x1d00010000000001");
+    // bgwork_ids.back().push_back("0x1d00010000000002");
+    // bgwork_ids.back().push_back("0x1d00010000000003");
     // // set up cpu_id_map: device_id
     // cpu_id_map["0x1d00000000000000"] = {0, 0};
     // cpu_id_map["0x1d00000000000001"] = {0, 1};
@@ -245,19 +247,43 @@ static void init_id_maps()
     // mem_id_map["0x1e00010000000004"] = {7};
 
     /* for circuit, stencil, pennant */
-    // set up util cores: socket_id, device_id
-    utils_ids.push_back({});
-    utils_ids.back().push_back("0x1d00000000000000");
-    utils_ids.back().push_back("0x1d00000000000001");
-    utils_ids.push_back({});
-    utils_ids.back().push_back("0x1d00010000000000");
-    utils_ids.back().push_back("0x1d00010000000001");
-    utils_ids.push_back({});
-    utils_ids.back().push_back("0x1d00020000000000");
-    utils_ids.back().push_back("0x1d00020000000001");
-    utils_ids.push_back({});
-    utils_ids.back().push_back("0x1d00030000000000");
-    utils_ids.back().push_back("0x1d00030000000001");
+    vector<std::string> bgwork_array;
+    bgwork_array.push_back("0000000013");
+    bgwork_array.push_back("0000000012");
+    bgwork_array.push_back("0000000011");
+    bgwork_array.push_back("0000000010");
+    bgwork_array.push_back("000000000f");
+    bgwork_array.push_back("000000000e");
+    bgwork_array.push_back("000000000d");
+    bgwork_array.push_back("000000000c");
+    bgwork_array.push_back("000000000b");
+    bgwork_array.push_back("000000000a");
+    bgwork_array.push_back("0000000009");
+    bgwork_array.push_back("0000000008");
+    bgwork_array.push_back("0000000007");
+    bgwork_array.push_back("0000000006");
+    bgwork_array.push_back("0000000005");
+    bgwork_array.push_back("0000000004");
+    bgwork_array.push_back("0000000003");
+    bgwork_array.push_back("0000000002");
+
+    // set up bgwork cores: socket_id, device_id
+    bgwork_ids.push_back({});
+    for (size_t i = 0; i < num_bgworks; i++) {
+        bgwork_ids.back().push_back("0x1d0000" + bgwork_array[i]);
+    }
+    bgwork_ids.push_back({});
+    for (size_t i = 0; i < num_bgworks; i++) {
+        bgwork_ids.back().push_back("0x1d0001" + bgwork_array[i]);
+    }
+    bgwork_ids.push_back({});
+    for (size_t i = 0; i < num_bgworks; i++) {
+        bgwork_ids.back().push_back("0x1d0002" + bgwork_array[i]);
+    }
+    bgwork_ids.push_back({});
+    for (size_t i = 0; i < num_bgworks; i++) {
+        bgwork_ids.back().push_back("0x1d0003" + bgwork_array[i]);
+    }
     // set up cpu_id_map: device_id
     cpu_id_map["0x1d00000000000000"] = {0, 0};
     cpu_id_map["0x1d00000000000001"] = {0, 1};
@@ -277,8 +303,8 @@ static void init_id_maps()
     cpu_id_map["0x1d0000000000000f"] = {0, 15};
     cpu_id_map["0x1d00000000000010"] = {0, 16};
     cpu_id_map["0x1d00000000000011"] = {0, 17};
-    // cpu_id_map["0x1d00000000000012"] = {0, 18};
-    // cpu_id_map["0x1d00000000000013"] = {0, 19};
+    cpu_id_map["0x1d00000000000012"] = {0, 18};
+    cpu_id_map["0x1d00000000000013"] = {0, 19};
 
     cpu_id_map["0x1d00010000000000"] = {1, 20};
     cpu_id_map["0x1d00010000000001"] = {1, 21};
@@ -298,8 +324,8 @@ static void init_id_maps()
     cpu_id_map["0x1d0001000000000f"] = {1, 35};
     cpu_id_map["0x1d00010000000010"] = {1, 36};
     cpu_id_map["0x1d00010000000011"] = {1, 37};
-    // cpu_id_map["0x1d00010000000012"] = {1, 38};
-    // cpu_id_map["0x1d00010000000013"] = {1, 39};
+    cpu_id_map["0x1d00010000000012"] = {1, 38};
+    cpu_id_map["0x1d00010000000013"] = {1, 39};
 
     cpu_id_map["0x1d00020000000000"] = {2, 40};
     cpu_id_map["0x1d00020000000001"] = {2, 41};
@@ -319,8 +345,8 @@ static void init_id_maps()
     cpu_id_map["0x1d0002000000000f"] = {2, 55};
     cpu_id_map["0x1d00020000000010"] = {2, 56};
     cpu_id_map["0x1d00020000000011"] = {2, 57};
-    // cpu_id_map["0x1d00020000000012"] = {2, 58};
-    // cpu_id_map["0x1d00020000000013"] = {2, 59};
+    cpu_id_map["0x1d00020000000012"] = {2, 58};
+    cpu_id_map["0x1d00020000000013"] = {2, 59};
 
     cpu_id_map["0x1d00030000000000"] = {3, 60};
     cpu_id_map["0x1d00030000000001"] = {3, 61};
@@ -340,8 +366,8 @@ static void init_id_maps()
     cpu_id_map["0x1d0003000000000f"] = {3, 75};
     cpu_id_map["0x1d00030000000010"] = {3, 76};
     cpu_id_map["0x1d00030000000011"] = {3, 77};
-    // cpu_id_map["0x1d00030000000012"] = {3, 78};
-    // cpu_id_map["0x1d00030000000013"] = {3, 79};
+    cpu_id_map["0x1d00030000000012"] = {3, 78};
+    cpu_id_map["0x1d00030000000013"] = {3, 79};
 
     // set up mem_id_map for system memory, registered memory and zero-copy memory : socket_id
     mem_id_map["0x1e00000000000000"] = {0}; // system memory
@@ -396,7 +422,7 @@ static void init_id_maps()
 // create machine model (sherlock)
 EnhancedMachineModel *create_enhanced_machine_model()
 {
-    EnhancedMachineModel *machine = new EnhancedMachineModel("/Users/xluo/Documents/simulator_experiments/machine_config_temp");
+    EnhancedMachineModel *machine = new EnhancedMachineModel("/Users/xluo/Documents/simulator_experiments/machine_config_sapling");
     machine->default_seg_size = 4194304;
     machine->max_num_segs = 10;
     machine->realm_comm_overhead = 0.1;
@@ -415,14 +441,23 @@ SimpleMachineModel *create_simple_machine_model()
 
 void run_dag_file(int argc, char **argv)
 {
+    string folder;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--num_bgworks" or arg == "-nbg") {
+            num_bgworks = atoi(argv[++i]);
+        }
+        if (arg == "--log_folder" or arg == "-f") {
+            folder = argv[++i];
+        }
+    }
+    cout << "num_bgworks = " << num_bgworks << endl;
+    cout << "log_folder = " << folder << endl;
+
     EnhancedMachineModel *machine = create_enhanced_machine_model();
     // SimpleMachineModel *machine = create_simple_machine_model();
     Simulator simulator((MachineModel *) machine);
 
-    string folder;
-    if (argc == 2) {
-        folder = argv[1];
-    }
     unordered_map<int, float> cost_map;
     // get costs of tasks
     std::ifstream cost_file(folder + "/cost");
@@ -576,7 +611,7 @@ void run_dag_file(int argc, char **argv)
                     Task *cur_task;
                     CompDevice *comp_device = NULL;
                     MemDevice *mem_device = NULL;
-                    int random_util_id = rand() % utils_ids[0].size();
+                    int random_bgwork_id = rand() % bgwork_ids[0].size();
                     if (tar_mem_device_type == "System" or tar_mem_device_type == "Zero-Copy") {
                         int socket_id = mem_id_map[tar_mem_device_id];
                         mem_device = machine->get_sys_mem(socket_id);
@@ -594,7 +629,7 @@ void run_dag_file(int argc, char **argv)
                     if (comp_device_type == "CPU") {
                         pair<int, int> ids = cpu_id_map[comp_device_id];
                         // comp_device = machine->get_cpu(ids.second);
-                        pair<int, int> temp_ids = cpu_id_map[utils_ids[ids.first][random_util_id]];
+                        pair<int, int> temp_ids = cpu_id_map[bgwork_ids[ids.first][random_bgwork_id]];
                         comp_device = machine->get_cpu(temp_ids.second);
                     }
                     else if (comp_device_type == "GPU") {
@@ -763,10 +798,11 @@ void test_comm()
 
 int main(int argc, char **argv)
 {
+    num_bgworks = 1;
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    // run_dag_file(argc, argv);
+    run_dag_file(argc, argv);
     // stencil_1d_cpu();
-    test_comm();
+    // test_comm();
     std::chrono::steady_clock::time_point stop = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
     cout << "simulator runs: " << time_span.count() << " seconds" <<  endl;
