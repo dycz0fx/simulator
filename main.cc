@@ -2,6 +2,12 @@
 #include <unordered_set>
 #include <fstream>
 #include <utility>
+#include <algorithm>    // std::min
+
+int num_bgworks;
+int default_seg_size;
+int max_num_segs;
+double realm_comm_overhead;
 
 using std::string;
 using std::vector;
@@ -11,8 +17,7 @@ using std::to_string;
 using std::unordered_map;
 using std::unordered_set;
 using std::pair;
-
-int num_bgworks;
+using std::min;
 
 vector<string> split(string srcStr, const string& delim)
 {
@@ -58,8 +63,8 @@ void stencil_1d_cpu()
             for (int j = 0; j < num_sockets_per_node; j++) {
                 for (int k = 0; k < num_cpus_per_socket; k++) {
                     int socket_id = i * num_sockets_per_node + j;
-                    int task_id = socket_id * num_cpus_per_socket + k;
-                    string task_name = "comp_task " + to_string(task_id) + " iter " + to_string(t);
+                    int device_id = socket_id * num_cpus_per_socket + k;
+                    string task_name = "comp_task " + to_string(device_id) + " iter " + to_string(t);
                     float run_time = 1;
                     comp_tasks[t].emplace_back(simulator.new_comp_task(task_name, machine.get_cpu(socket_id, k), run_time, machine.get_sys_mem(socket_id)));
                 }
@@ -116,10 +121,10 @@ void stencil_1d_gpu()
             for (int j = 0; j < num_sockets_per_node; j++) {
                 for (int k = 0; k < num_gpus_per_socket; k++) {
                     int socket_id = i * num_sockets_per_node + j;
-                    int task_id = socket_id * num_gpus_per_socket + k;
-                    string task_name = "comp_task " + to_string(task_id) + " iter " + to_string(t);
+                    int device_id = socket_id * num_gpus_per_socket + k;
+                    string task_name = "comp_task " + to_string(device_id) + " iter " + to_string(t);
                     float run_time = 1;
-                    comp_tasks[t].emplace_back(simulator.new_comp_task(task_name, machine.get_gpu(task_id), run_time, machine.get_gpu_fb_mem(task_id)));
+                    comp_tasks[t].emplace_back(simulator.new_comp_task(task_name, machine.get_gpu(device_id), run_time, machine.get_gpu_fb_mem(device_id)));
                 }
             }
         }
@@ -420,13 +425,13 @@ static void init_id_maps()
     mem_id_map["0x1e00030000000004"] = {15};
 }
 // create machine model (sherlock)
-EnhancedMachineModel *create_enhanced_machine_model()
+EnhancedMachineModel *create_enhanced_machine_model(string machine_config)
 {
-    EnhancedMachineModel *machine = new EnhancedMachineModel("/Users/xluo/Documents/simulator_experiments/machine_config_sapling");
-    machine->default_seg_size = 4194304;
-    machine->max_num_segs = 10;
-    machine->realm_comm_overhead = 0.1;
-    std::cout << machine->to_string() << std::endl;
+    EnhancedMachineModel *machine = new EnhancedMachineModel(machine_config);
+    machine->default_seg_size = default_seg_size;
+    machine->max_num_segs = max_num_segs;
+    machine->realm_comm_overhead = realm_comm_overhead;
+    // std::cout << machine->to_string() << std::endl;
     init_id_maps();
     return machine;
 }
@@ -434,30 +439,13 @@ EnhancedMachineModel *create_enhanced_machine_model()
 SimpleMachineModel *create_simple_machine_model()
 {
     SimpleMachineModel *machine = new SimpleMachineModel(4, 20, 4);
-    std::cout << machine->to_string() << std::endl;
+    // std::cout << machine->to_string() << std::endl;
     init_id_maps();
     return machine;
 }
 
-void run_dag_file(int argc, char **argv)
+void run_dag_file(Simulator &simulator, MachineModel *machine, string folder)
 {
-    string folder;
-    for (int i = 1; i < argc; i++) {
-        std::string arg = argv[i];
-        if (arg == "--num_bgworks" or arg == "-nbg") {
-            num_bgworks = atoi(argv[++i]);
-        }
-        if (arg == "--log_folder" or arg == "-f") {
-            folder = argv[++i];
-        }
-    }
-    cout << "num_bgworks = " << num_bgworks << endl;
-    cout << "log_folder = " << folder << endl;
-
-    EnhancedMachineModel *machine = create_enhanced_machine_model();
-    // SimpleMachineModel *machine = create_simple_machine_model();
-    Simulator simulator((MachineModel *) machine);
-
     unordered_map<int, float> cost_map;
     // get costs of tasks
     std::ifstream cost_file(folder + "/cost");
@@ -746,26 +734,24 @@ void run_dag_file(int argc, char **argv)
 
 }
 
-void test_comm()
+// max_peer: the number of concurrent communications
+void test_comm(Simulator &simulator, MachineModel *machine, size_t message_size, int max_peer)
 {
-    EnhancedMachineModel *machine = create_enhanced_machine_model();
-    // SimpleMachineModel *machine = create_simple_machine_model();
-    cout << machine->to_string();
-    Simulator simulator((MachineModel *) machine);
+    // cout << machine->to_string();
     int num_nodes = 2;
     int num_sockets_per_node = 1;
     int num_cpus_per_socket = 20;
     int num_gpus_per_socket = 4;
-
+    int task_id = 0;
     vector<Task *> comp_tasks;
     for (int i = 0; i < num_nodes; i++) {
         for (int j = 0; j < num_sockets_per_node; j++) {
             for (int k = 0; k < num_cpus_per_socket; k++) {
                 int socket_id = i * num_sockets_per_node + j;
-                int task_id = socket_id * num_cpus_per_socket + k;
-                string task_name = "comp_task " + to_string(task_id) + " on socket " + to_string(socket_id) + " cpu " + to_string(k);
+                int device_id = socket_id * num_cpus_per_socket + k;
+                string task_name = "comp_task " + to_string(task_id++) + " on socket " + to_string(socket_id) + " cpu " + to_string(k) + " device_id " + to_string(device_id);
                 float run_time = 0;
-                comp_tasks.emplace_back(simulator.new_comp_task(task_name, machine->get_cpu(task_id), run_time, machine->get_sys_mem(socket_id)));
+                comp_tasks.emplace_back(simulator.new_comp_task(task_name, machine->get_cpu(device_id), run_time, machine->get_sys_mem(socket_id)));
             }
         }
     }
@@ -774,35 +760,159 @@ void test_comm()
         for (int j = 0; j < num_sockets_per_node; j++) {
             for (int k = 0; k < num_gpus_per_socket; k++) {
                 int socket_id = i * num_sockets_per_node + j;
-                int task_id = socket_id * num_gpus_per_socket + k;
-                string task_name = "comp_task " + to_string(task_id) + " on socket " + to_string(socket_id) + " gpu " + to_string(k);;
+                int device_id = socket_id * num_gpus_per_socket + k;
+                string task_name = "comp_task " + to_string(task_id++) + " on socket " + to_string(socket_id) + " gpu " + to_string(k) + " device_id " + to_string(device_id);
                 float run_time = 0;
-                comp_tasks.emplace_back(simulator.new_comp_task(task_name, machine->get_gpu(task_id), run_time, machine->get_gpu_fb_mem(task_id)));
+                comp_tasks.emplace_back(simulator.new_comp_task(task_name, machine->get_gpu(device_id), run_time, machine->get_gpu_fb_mem(device_id)));
             }
         }
     }
 
     Task *src = comp_tasks[40];
     Task *tar = comp_tasks[44];
-    long message_size = 64 << 20;
     simulator.enter_ready_queue(src);
-    simulator.new_comm_task(src, tar, message_size);
-    simulator.new_comm_task(src, tar, message_size);
-    simulator.new_comm_task(src, tar, message_size);
-    simulator.new_comm_task(src, tar, message_size);
-    simulator.new_comm_task(src, tar, message_size);
-    simulator.new_comm_task(src, tar, message_size);
+    for (int i = 0; i < max_peer; i++) {
+        simulator.new_comm_task(src, tar, message_size);
+    }
 
     simulator.simulate();
 }
 
+// multiple nodes communicate with one node
+void test_congestion(Simulator &simulator, MachineModel *machine, size_t message_size, int max_peer)
+{
+    // cout << machine->to_string();
+    int num_nodes = 4;
+    int num_sockets_per_node = 1;
+    int num_cpus_per_socket = 20;
+    int num_gpus_per_socket = 4;
+    int task_id = 0;
+    vector<Task *> comp_tasks;
+    for (int i = 0; i < num_nodes; i++) {
+        for (int j = 0; j < num_sockets_per_node; j++) {
+            for (int k = 0; k < num_cpus_per_socket; k++) {
+                int socket_id = i * num_sockets_per_node + j;
+                int device_id = socket_id * num_cpus_per_socket + k;
+                string task_name = "comp_task " + to_string(task_id++) + " on socket " + to_string(socket_id) + " cpu " + to_string(k) + " device_id " + to_string(device_id);
+                float run_time = 0;
+                comp_tasks.emplace_back(simulator.new_comp_task(task_name, machine->get_cpu(device_id), run_time, machine->get_sys_mem(socket_id)));
+            }
+        }
+    }
+
+    for (int i = 0; i < num_nodes; i++) {
+        for (int j = 0; j < num_sockets_per_node; j++) {
+            for (int k = 0; k < num_gpus_per_socket; k++) {
+                int socket_id = i * num_sockets_per_node + j;
+                int device_id = socket_id * num_gpus_per_socket + k;
+                string task_name = "comp_task " + to_string(task_id++) + " on socket " + to_string(socket_id) + " gpu " + to_string(k) + " device_id " + to_string(device_id);
+                float run_time = 0;
+                comp_tasks.emplace_back(simulator.new_comp_task(task_name, machine->get_gpu(device_id), run_time, machine->get_gpu_fb_mem(device_id)));
+            }
+        }
+    }
+    /**
+     * NODE 0: CPU (0-19)  GPU (80-83)
+     * NODE 1: CPU (20-39) GPU (84-87)
+     * NODE 2: CPU (40-59) GPU (88-91)
+     * NODE 3: CPU (60-79) GPU (92-95)
+     */
+    int num_peers = min(max_peer, num_nodes-1);
+    for (int i = 0; i < num_peers; i++) {
+        Task *src = comp_tasks[80+4*i];
+        Task *tar = comp_tasks[92];
+        simulator.enter_ready_queue(src);
+        simulator.new_comm_task(src, tar, message_size);
+    }
+
+    simulator.simulate();
+}
+
+
 int main(int argc, char **argv)
 {
     num_bgworks = 1;
+    default_seg_size = 4194304;
+    max_num_segs = 10;
+    realm_comm_overhead = 0.1;
+
+    string log_folder = "";
+    size_t message_size = 64 << 20;
+    int max_peer = 1;
+    int model_version = 0;
+    string model_config = "/Users/xluo/Documents/simulator_experiments/machine_config_sapling";
+    int if_run_dag_file = 0;
+    int if_test_comm = 0;
+    int if_test_congestion = 0;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--num_bgworks" or arg == "-nbg") {
+            num_bgworks = atoi(argv[++i]);
+        }
+        if (arg == "--log_folder" or arg == "-f") {
+            log_folder = argv[++i];
+        }
+        if (arg == "--message_size" or arg == "-m") {
+            message_size = atoi(argv[++i]);
+        }
+        if (arg == "--max_peer" or arg == "-p") {
+            max_peer = atoi(argv[++i]);
+        }
+        if (arg == "--model_version" or arg == "-v") {
+            model_version = atoi(argv[++i]);
+        }
+        if (arg == "--model_config" or arg == "-c") {
+            model_config = argv[++i];
+        }
+        if (arg == "--default_seg_size") {
+            default_seg_size = atoi(argv[++i]);
+        }
+        if (arg == "--max_num_segs") {
+            max_num_segs = atoi(argv[++i]);
+        }
+        if (arg == "--realm_comm_overhead") {
+            realm_comm_overhead = atof(argv[++i]);
+        }
+        if (arg == "--if_run_dag_file" or arg =="-dag") {
+            if_run_dag_file = atoi(argv[++i]);
+        }
+        if (arg == "--if_test_comm" or arg =="-comm") {
+            if_test_comm = atoi(argv[++i]);
+        }
+        if (arg == "--if_test_congestion" or arg =="-cong") {
+            if_test_congestion = atoi(argv[++i]);
+        }
+    }
+    cout << "num_bgworks = " << num_bgworks << endl;
+    cout << "default_seg_size = " << default_seg_size << endl;
+    cout << "max_num_segs = " << max_num_segs << endl;
+    cout << "realm_comm_overhead = " << realm_comm_overhead << endl;
+    cout << "log_folder = " << log_folder << endl;
+    cout << "message_size = " << message_size << endl;
+    cout << "max_peer = " << max_peer << endl;
+    cout << "model_version = " << model_version << endl;
+    cout << "model_config = " << model_config << endl;
+
+    MachineModel *machine = NULL;
+    if (model_version == 0) {
+        machine = create_simple_machine_model();
+    }
+    else {
+        machine = create_enhanced_machine_model(model_config);
+    }
+
+    Simulator simulator(machine);
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    run_dag_file(argc, argv);
+    if (if_run_dag_file) {
+      run_dag_file(simulator, machine, log_folder);
+    }
+    if (if_test_comm) {
+      test_comm(simulator, machine, message_size, max_peer);
+    }
+    if (if_test_congestion) {
+      test_congestion(simulator, machine, message_size, max_peer);
+    }
     // stencil_1d_cpu();
-    // test_comm();
     std::chrono::steady_clock::time_point stop = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
     cout << "simulator runs: " << time_span.count() << " seconds" <<  endl;

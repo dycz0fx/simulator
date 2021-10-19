@@ -89,7 +89,8 @@ public:
   virtual ~MachineModel() = default;
   virtual int get_version() const = 0;
   virtual CompDevice *get_cpu(int device_id) const = 0;
-  virtual MemDevice *get_sys_mem(int devicd_id) const = 0;
+  virtual CompDevice *get_cpu(int socket_id, int local_id) const = 0;
+  virtual MemDevice *get_sys_mem(int socket_id) const = 0;
   virtual CompDevice *get_gpu(int device_id) const = 0;
   virtual MemDevice *get_gpu_fb_mem(int devicd_id) const = 0;
   virtual int get_num_gpus() const = 0;
@@ -109,6 +110,7 @@ public:
   ~SimpleMachineModel();
   int get_version() const;
   CompDevice *get_cpu(int device_id) const;
+  CompDevice *get_cpu(int socket_id, int local_id) const;
   MemDevice *get_sys_mem(int socket_id) const;
   CompDevice *get_gpu(int device_id) const;
   MemDevice *get_gpu_fb_mem(int devicd_id) const;

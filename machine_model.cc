@@ -87,10 +87,17 @@ CompDevice *SimpleMachineModel::get_cpu(int device_id) const
   return id_to_cpu.at(device_id);
 }
 
-MemDevice *SimpleMachineModel::get_sys_mem(int device_id) const
+// socket_id = node_id in SimpleMachineModel
+CompDevice *SimpleMachineModel::get_cpu(int socket_id, int local_id) const
 {
-  assert(id_to_sys_mem.find(device_id) != id_to_sys_mem.end());
-  return id_to_sys_mem.at(device_id);
+  int device_id = socket_id * num_cpus_per_node + local_id;
+  return get_cpu(device_id);
+}
+
+MemDevice *SimpleMachineModel::get_sys_mem(int socket_id) const
+{
+  assert(id_to_sys_mem.find(socket_id) != id_to_sys_mem.end());
+  return id_to_sys_mem.at(socket_id);
 }
 
 CompDevice *SimpleMachineModel::get_gpu(int device_id) const
@@ -636,7 +643,7 @@ CompDevice *EnhancedMachineModel::get_cpu(int socket_id, int local_id) const
     printf("MachineModel: get_cpu - cannot find cpu (%d %d)\n", socket_id, local_id);
     assert(false);
   }
-} 
+}
 
 CompDevice *EnhancedMachineModel::get_gpu(int device_id) const
 {
